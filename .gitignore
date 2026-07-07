@@ -1,0 +1,22 @@
+# Node / Vite UI
+ui/node_modules/
+ui/dist/
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+
+# Editor / OS
+.DS_Store
+*.swp
+
+# Backups & scratch
+*.bak
+*.tmp
+
+# Local container data lives in named docker volumes, not here —
+# but ignore any stray bind-mount dirs just in case.
+data/
+lgtm-data/
+phoenix-data/

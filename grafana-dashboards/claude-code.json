@@ -1,0 +1,2033 @@
+{
+  "uid": "claude-code-usage",
+  "title": "Claude Code Usage",
+  "tags": [
+    "claude-code",
+    "otel"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "model",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(claude_code_token_usage_tokens_total, model)",
+          "refId": "model"
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "allValue": ".*"
+      },
+      {
+        "name": "session",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(claude_code_token_usage_tokens_total, session_id)",
+          "refId": "session"
+        },
+        "regex": "/^(.{8})/",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "allValue": ".*"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 101,
+      "type": "row",
+      "title": "Overview",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Total Cost",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(claude_code_cost_usage_USD_total{model=~\"$model\",session_id=~\"$session.*\"}[$__range]))",
+          "refId": "A"
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "area",
+        "colorMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "description": "FIXED: was a bare sum() of the raw counter, which shows the CURRENT process's cumulative value regardless of the time picker - and actually UNDERCOUNTS, since the counter resets on every new Claude Code process and a bare sum only sees whichever process last reported. increase(...[$__range]) correctly totals cost accrued within the selected window, counter-reset-safe (proven: bare sum stayed flat at $7.84 across 1h/24h/7d pickers; increase() correctly returned $40.59/$122/$677 for the same three)."
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Total Tokens",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(claude_code_token_usage_tokens_total{model=~\"$model\",session_id=~\"$session.*\"}[$__range]))",
+          "refId": "A"
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "area",
+        "colorMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "description": "FIXED: was a bare sum() of the raw counter - ignored the time picker and undercounted across process restarts. Now increase(...[$__range]), matching Total Cost's fix."
+    },
+    {
+      "id": 7,
+      "type": "gauge",
+      "title": "Cache Hit %",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(claude_code_token_usage_tokens_total{type=\"cacheRead\",model=~\"$model\",session_id=~\"$session.*\"}[$__range])) / sum(increase(claude_code_token_usage_tokens_total{model=~\"$model\",session_id=~\"$session.*\"}[$__range]))",
+          "refId": "A"
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#d03b3b",
+                "value": null
+              },
+              {
+                "color": "#fab219",
+                "value": 0.5
+              },
+              {
+                "color": "#0ca30c",
+                "value": 0.85
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {},
+      "description": "Share of tokens served from prompt cache vs fresh. High = long sessions replaying big context repeatedly - this is the single biggest lever on spend."
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Sessions in Range",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count(count by (session_id) (increase(claude_code_token_usage_tokens_total{model=~\"$model\",session_id=~\"$session.*\"}[$__range]) > 0))",
+          "refId": "A"
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "none",
+        "colorMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "description": "FIXED: distinct session_ids with token activity in range. The old query summed claude_code_session_count_total, a counter that stays near-flat regardless of how many sessions actually ran (it read 1 while 8 sessions were active) - not a true concurrency or range count."
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Active Time",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(claude_code_active_time_seconds_total{session_id=~\"$session.*\"}[$__range]))",
+          "refId": "A"
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "area",
+        "colorMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "description": "FIXED: was a bare sum() of the raw counter - ignored the time picker and undercounted across process restarts. Now increase(...[$__range])."
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Priciest Session",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max(sum by (session_id) (increase(claude_code_cost_usage_USD_total{model=~\"$model\",session_id=~\"$session.*\"}[$__range])))",
+          "refId": "A"
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none"
+      },
+      "description": "CHANGED from raw token count to dollar cost: \"51.0 Mil\" tokens is an abstract number with no reference point for whether that's fine or a problem; a dollar figure is something you can judge at a glance. The single most expensive session right now - see the Top Sessions table below for which one and its full breakdown."
+    },
+    {
+      "id": 102,
+      "type": "row",
+      "title": "Cost & Token Flow",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Tokens by Type Over Time",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 6
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (type) (rate(claude_code_token_usage_tokens_total{model=~\"$model\",session_id=~\"$session.*\"}[$__rate_interval])) * $__interval_ms / 1000",
+          "refId": "A",
+          "legendFormat": "{{type}}"
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#8a8a86"
+          },
+          "custom": {
+            "fillOpacity": 25,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "input"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#2a78d6"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "output"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#1baf7a"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cacheRead"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#eda100"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cacheCreation"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#008300"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "description": "input/output/cacheRead/cacheCreation. cacheRead dominating = long-running session replaying context every turn."
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Tokens by Model x Type Over Time",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 6
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace(sum by (model, type) (rate(claude_code_token_usage_tokens_total{session_id=~\"$session.*\"}[$__rate_interval])) * $__interval_ms / 1000, \"model\", \"$1\", \"model\", \"^([^[]+).*$\")",
+          "refId": "A",
+          "legendFormat": "{{model}} - {{type}}"
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 15,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "description": "Same breakdown split per model - spot a model switch shifting the token mix."
+    },
+    {
+      "id": 25,
+      "type": "timeseries",
+      "title": "Token Volume Over Time by Model",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 6
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace(sum by (model) (rate(claude_code_token_usage_tokens_total{session_id=~\"$session.*\"}[$__rate_interval])) * $__interval_ms / 1000, \"model\", \"$1\", \"model\", \"^([^[]+).*$\")",
+          "refId": "A",
+          "legendFormat": "{{model}}"
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#8a8a86"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "claude-sonnet-5"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#2a78d6"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "claude-opus-4-8"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#4a3aa7"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "claude-haiku-4-5"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#1baf7a"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {},
+      "description": "Spot a model switch: usage shifting from one model to another over time."
+    },
+    {
+      "id": 103,
+      "type": "row",
+      "title": "By Model",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      }
+    },
+    {
+      "id": 27,
+      "type": "table",
+      "title": "Model Comparison",
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 0,
+        "y": 15
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace(sum by (model) (increase(claude_code_token_usage_tokens_total{session_id=~\"$session.*\"}[$__range])), \"model\", \"$1\", \"model\", \"^([^[]+).*$\")",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace(sum by (model) (increase(claude_code_cost_usage_USD_total{session_id=~\"$session.*\"}[$__range])), \"model\", \"$1\", \"model\", \"^([^[]+).*$\")",
+          "refId": "B",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace(sum by (model) (increase(claude_code_cost_usage_USD_total{session_id=~\"$session.*\"}[$__range])) / (sum by (model) (increase(claude_code_token_usage_tokens_total{session_id=~\"$session.*\"}[$__range])) / 1000), \"model\", \"$1\", \"model\", \"^([^[]+).*$\")",
+          "refId": "C",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace(sum by (model) (increase(claude_code_token_usage_tokens_total{type=\"cacheRead\",session_id=~\"$session.*\"}[$__range])) / sum by (model) (increase(claude_code_token_usage_tokens_total{session_id=~\"$session.*\"}[$__range])), \"model\", \"$1\", \"model\", \"^([^[]+).*$\")",
+          "refId": "D",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "avg by (model) (avg_over_time({service_name=~\".+\"} | event_name=\"api_request\" | session_id=~\"$session.*\" | unwrap duration_ms [$__range]))",
+          "refId": "E",
+          "queryType": "instant",
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "(sum by (model) (count_over_time({service_name=~\".+\"} | event_name=\"api_error\" | session_id=~\"$session.*\" [$__range])) or (sum by (model) (count_over_time({service_name=~\".+\"} | event_name=~\"api_request|api_error\" | session_id=~\"$session.*\" [$__range])) * 0)) / sum by (model) (count_over_time({service_name=~\".+\"} | event_name=~\"api_request|api_error\" | session_id=~\"$session.*\" [$__range]))",
+          "refId": "F",
+          "queryType": "instant",
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace(round(sum by (model) (increase(claude_code_lines_of_code_count_total{type=\"added\",session_id=~\"$session.*\"}[$__range]))), \"model\", \"$1\", \"model\", \"^([^[]+).*$\")",
+          "refId": "G",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "quantile_over_time(0.5, {service_name=~\".+\"} | event_name=\"api_request\" | session_id=~\"$session.*\" | unwrap duration_ms [$__range]) by (model)",
+          "refId": "H",
+          "queryType": "instant",
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "quantile_over_time(0.95, {service_name=~\".+\"} | event_name=\"api_request\" | session_id=~\"$session.*\" | unwrap duration_ms [$__range]) by (model)",
+          "refId": "I",
+          "queryType": "instant",
+          "instant": true
+        }
+      ],
+      "datasource": {
+        "type": "datasource",
+        "uid": "-- Mixed --"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Cost"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "$ / 1K tok"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Cache hit %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "#d03b3b",
+                      "value": null
+                    },
+                    {
+                      "color": "#fab219",
+                      "value": 0.5
+                    },
+                    {
+                      "color": "#0ca30c",
+                      "value": 0.85
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Error %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "#0ca30c",
+                      "value": null
+                    },
+                    {
+                      "color": "#fab219",
+                      "value": 0.05
+                    },
+                    {
+                      "color": "#d03b3b",
+                      "value": 0.15
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Avg latency (ms)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ms"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p50 latency (ms)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ms"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p95 latency (ms)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ms"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true
+      },
+      "description": "One row per model - everything you'd otherwise need five separate gauges to compare. Cache hit % and Error % are genuinely status metrics (good/bad), so they alone get the green/red treatment; the rest is plain magnitude. FIXED: Error % used to silently disappear from this table whenever a model had zero api_error events, because dividing by an empty vector in PromQL/LogQL yields no series at all - the numerator now falls back to an explicit 0 per model so the division always has something to divide. Added p50/p95 latency alongside the average, since a mean alone hides tail latency.",
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "model",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "Value #A": "Tokens",
+              "Value #B": "Cost",
+              "Value #C": "$ / 1K tok",
+              "Value #D": "Cache hit %",
+              "Value #E": "Avg latency (ms)",
+              "Value #F": "Error %",
+              "Value #G": "Lines added",
+              "Value #H": "p50 latency (ms)",
+              "Value #I": "p95 latency (ms)"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "type": "table",
+      "title": "MCP Tool Token Usage",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 15
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "topk(15, sum by (mcp_server_name, mcp_tool_name) (increase(claude_code_token_usage_tokens_total{mcp_tool_name!=\"\",session_id=~\"$session.*\"}[$__range])))",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Time"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "options": {},
+      "description": "Per-MCP-tool token attribution (e.g. Grafana get_dashboard_by_uid vs narrower tools)."
+    },
+    {
+      "id": 104,
+      "type": "row",
+      "title": "Tool Usage",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 23
+      }
+    },
+    {
+      "id": 39,
+      "type": "table",
+      "title": "Tool Usage Summary (calls, latency, output size, error rate)",
+      "datasource": {
+        "type": "datasource",
+        "uid": "-- Mixed --"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "queryType": "instant",
+          "instant": true,
+          "expr": "sum by (tool_name) (count_over_time({service_name=~\".+\"} | event_name=\"tool_result\" | session_id=~\"$session.*\" [$__range]))"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "queryType": "instant",
+          "instant": true,
+          "expr": "avg by (tool_name) (avg_over_time({service_name=~\".+\"} | event_name=\"tool_result\" | session_id=~\"$session.*\" | unwrap duration_ms [$__range]))"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "queryType": "instant",
+          "instant": true,
+          "expr": "sum by (tool_name) (sum_over_time({service_name=~\".+\"} | event_name=\"tool_result\" | session_id=~\"$session.*\" | unwrap tool_result_size_bytes [$__range]))"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "queryType": "instant",
+          "instant": true,
+          "expr": "(sum by (tool_name) (count_over_time({service_name=~\".+\"} | event_name=\"tool_result\" | session_id=~\"$session.*\" | success=\"false\" [$__range])) or (sum by (tool_name) (count_over_time({service_name=~\".+\"} | event_name=\"tool_result\" | session_id=~\"$session.*\" [$__range])) * 0)) / sum by (tool_name) (count_over_time({service_name=~\".+\"} | event_name=\"tool_result\" | session_id=~\"$session.*\" [$__range]))"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "tool_name",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Time 1": true,
+              "Time 2": true,
+              "Time 3": true,
+              "Time 4": true
+            },
+            "indexByName": {
+              "tool_name": 0,
+              "Value #A": 1,
+              "Value #B": 2,
+              "Value #C": 3,
+              "Value #D": 4
+            },
+            "renameByName": {
+              "tool_name": "Tool",
+              "Value #A": "Calls",
+              "Value #B": "Avg Duration",
+              "Value #C": "Output Size",
+              "Value #D": "Error %"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Avg Duration"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ms"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Output Size"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Calls"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-blues"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Error %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "#0ca30c",
+                      "value": null
+                    },
+                    {
+                      "color": "#fab219",
+                      "value": 0.05
+                    },
+                    {
+                      "color": "#d03b3b",
+                      "value": 0.15
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "sortBy": [
+          {
+            "displayName": "Calls",
+            "desc": true
+          }
+        ]
+      },
+      "description": "MERGED from four separate panels (Tool Result Size, Tool Call Count, Avg Tool Duration bargauges + Tool Error Rate table) into one per-tool summary. One row per tool: call count (blue magnitude bar), average duration, total output bytes injected into context, and failure rate (green/red status). Error % uses the or-fallback-to-zero pattern so a tool with zero failures shows 0% instead of vanishing.",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      }
+    },
+    {
+      "id": 36,
+      "type": "table",
+      "title": "Slowest Tool Calls (highest duration)",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo"
+          },
+          "query": "{ name = \"claude_code.tool\" && span.session.id =~ \"$session.*\" } | select(span.tool_name, span.full_command)",
+          "queryType": "traceql",
+          "tableType": "spans",
+          "refId": "A",
+          "limit": 50
+        }
+      ],
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "duration"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ns"
+              },
+              {
+                "id": "displayName",
+                "value": "Duration"
+              },
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "tool_name"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Tool"
+              },
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "full_command"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Command (Bash only)"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "text",
+                  "wrapText": true
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "traceIdHidden": true,
+              "traceService": true,
+              "traceName": true,
+              "spanID": true,
+              "name": true,
+              "time": true
+            },
+            "indexByName": {
+              "duration": 0,
+              "tool_name": 1,
+              "full_command": 2
+            }
+          }
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "sortBy": [
+          {
+            "displayName": "Duration",
+            "desc": true
+          }
+        ]
+      },
+      "description": "Every claude_code.tool span (any tool, not just Bash), one row per actual call, sorted slowest-first. Source: Tempo tableType=spans so tool_name and full_command are flat columns. full_command is only populated for Bash (needs OTEL_LOG_TOOL_DETAILS=1); other tools still show their duration and name."
+    },
+    {
+      "id": 19,
+      "type": "logs",
+      "title": "Bash Tool Calls (duration, result size, and command on one line)",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 33
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{service_name=~\".+\"} | event_name=\"tool_result\" | tool_name=\"Bash\" | session_id=~\"$session.*\" | line_format \"{{.tool_input}}\" | json command=\"command\" | line_format \"{{.duration_ms}}ms {{if eq .success \\\"true\\\"}}OK{{else}}FAIL{{end}} ({{.tool_result_size_bytes}}B)  {{.command}}\"",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "wrapLogMessage": true
+      },
+      "description": "FIXED: was a raw logs panel where every row just said \"claude_code.tool_result\", with the command/duration/result size hidden behind a click-to-expand. line_format now parses the bare command out of tool_input and bakes duration, OK/FAIL, and result size directly into the visible line. For a slowest-first ranking (not just chronological), see \"Slowest Tool Calls\" below, which sources the same data from traces."
+    },
+    {
+      "id": 105,
+      "type": "row",
+      "title": "Latency & Traces",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 41
+      }
+    },
+    {
+      "id": 21,
+      "type": "heatmap",
+      "title": "Time to First Token by Model",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 42
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo"
+          },
+          "query": "{ name = \"claude_code.llm_request\" } | histogram_over_time(span.ttft_ms) by (span.model)",
+          "queryType": "traceql",
+          "refId": "A"
+        }
+      ],
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {},
+      "description": "TraceQL metrics run directly against Tempo span data. Tempo caps metrics queries at ~2-3h of range (confirmed: 120min works, 180min returns HTTP 400), so this panel is pinned to the last hour regardless of the dashboard time picker.",
+      "timeFrom": "1h"
+    },
+    {
+      "id": 35,
+      "type": "table",
+      "title": "Slowest User Prompts (highest turn duration)",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 42
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo"
+          },
+          "query": "{ name = \"claude_code.interaction\" && span.user_prompt != nil && span.session.id =~ \"$session.*\" } | select(span.user_prompt)",
+          "queryType": "traceql",
+          "tableType": "spans",
+          "refId": "A",
+          "limit": 50
+        }
+      ],
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "duration"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ns"
+              },
+              {
+                "id": "displayName",
+                "value": "Turn Duration"
+              },
+              {
+                "id": "custom.width",
+                "value": 130
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "user_prompt"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Prompt"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "text",
+                  "wrapText": true
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "traceIdHidden": true,
+              "traceService": true,
+              "traceName": true,
+              "spanID": true,
+              "name": true,
+              "time": true
+            },
+            "indexByName": {
+              "duration": 0,
+              "user_prompt": 1
+            }
+          }
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "sortBy": [
+          {
+            "displayName": "Turn Duration",
+            "desc": true
+          }
+        ]
+      },
+      "description": "The actual user prompt text for the slowest turns, one row per turn, sorted slowest-first. Source: claude_code.interaction spans queried with Tempo tableType=spans (which flattens the selected span.user_prompt attribute into a real column instead of nesting it behind a click). Duration IS the turn's wall-clock time from prompt to final response. Prompt text is present only because OTEL_LOG_USER_PROMPTS=1."
+    },
+    {
+      "id": 37,
+      "type": "table",
+      "title": "Time Blocked on User Approval (permission wait, slowest first)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 51
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo"
+          },
+          "query": "{ name = \"claude_code.tool.blocked_on_user\" && span.session.id =~ \"$session.*\" } | select(span.decision)",
+          "queryType": "traceql",
+          "tableType": "spans",
+          "refId": "A",
+          "limit": 50
+        }
+      ],
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "duration"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ns"
+              },
+              {
+                "id": "displayName",
+                "value": "Wait Duration"
+              },
+              {
+                "id": "custom.width",
+                "value": 140
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "decision"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Decision"
+              }
+            ]
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "traceIdHidden": true,
+              "traceService": true,
+              "traceName": true,
+              "spanID": true,
+              "name": true,
+              "time": true
+            },
+            "indexByName": {
+              "duration": 0,
+              "decision": 1
+            }
+          }
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "sortBy": [
+          {
+            "displayName": "Wait Duration",
+            "desc": true
+          }
+        ]
+      },
+      "description": "FIXED: was Tempo-only with the decision nested. Now tableType=spans flattens duration + decision into columns. claude_code.tool.blocked_on_user wraps the wait for a permission prompt - pure human latency, not model or tool time. Large values here mean approval friction (you weren't at the keyboard), not agent slowness - a recommended agentic-UX KPI alongside model/tool latency."
+    },
+    {
+      "id": 22,
+      "type": "table",
+      "title": "Subagent Delegation - LLM Calls Inside an Agent Tool Call",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 51
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo"
+          },
+          "query": "{ name = \"claude_code.tool\" && span.tool_name = \"Agent\" } >> { name = \"claude_code.llm_request\" } | select(span.model, span.input_tokens, span.output_tokens, span.duration_ms)",
+          "queryType": "traceql",
+          "refId": "A",
+          "limit": 200
+        }
+      ],
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showTypeIcons": true,
+        "sortBy": [
+          {
+            "displayName": "Duration",
+            "desc": true
+          }
+        ]
+      },
+      "description": "FIXED: Claude Code has no flat agent_id span attribute (confirmed against the official Agent SDK observability docs) - the old query matched zero real spans and Grafana fell back to showing unrelated interaction spans. Subagent delegation is structural: a subagent's llm_request spans nest under the parent's claude_code.tool span where tool_name=\"Agent\". This query finds those descendant llm_request spans directly. Tempo nests the selected attributes (model, tokens, duration) under each row - click the expand arrow to see them."
+    },
+    {
+      "id": 23,
+      "type": "table",
+      "title": "Trace Explorer (filtered by $session above) - click a Trace ID to open the full waterfall",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 59
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo"
+          },
+          "query": "{ span.session.id =~ \"$session.*\" }",
+          "queryType": "traceql",
+          "refId": "A",
+          "limit": 20
+        }
+      ],
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {},
+      "description": "Drill into one session's actual trace waterfall - the full interaction -> llm_request/tool -> tool.execution tree. Pick a session in the filter above to narrow this down. FIXED: queryType was \"traceqlSearch\", which is driven by a UI filter-builder state and silently ignores a hand-written query string, so this never actually filtered by session. Switched to \"traceql\", the raw-query mode that honors the query field as written."
+    },
+    {
+      "id": 106,
+      "type": "row",
+      "title": "Session & Context Health",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 68
+      }
+    },
+    {
+      "id": 12,
+      "type": "table",
+      "title": "Top Sessions by Token Usage - with Cost & Active Time (pick a session_id prefix for the filter above)",
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 0,
+        "y": 69
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "topk(15, sum by (session_id, terminal_type) (increase(claude_code_token_usage_tokens_total{model=~\"$model\"}[$__range])))",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (session_id) (increase(claude_code_cost_usage_USD_total{model=~\"$model\"}[$__range]))",
+          "refId": "B",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (session_id) (increase(claude_code_active_time_seconds_total[$__range]))",
+          "refId": "C",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "datasource": {
+        "type": "datasource",
+        "uid": "-- Mixed --"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Tokens"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-blues"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Time"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Cost"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Active Time"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "sortBy": [
+          {
+            "displayName": "Tokens",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "session_id",
+            "mode": "inner"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "Value #A": "Tokens",
+              "Value #B": "Cost",
+              "Value #C": "Active Time"
+            }
+          }
+        }
+      ],
+      "description": "Deliberately NOT filtered by $session - this is the picker. One-hue magnitude ramp on the Tokens column (this is ranking, not status) - a handful of huge sessions dominating means restart/compact discipline is the fix. Cost and Active Time are joined in so you can tell a token-heavy-but-fast session (efficient) from a token-heavy-and-slow one (the actual long-session anti-pattern this row is named for)."
+    },
+    {
+      "id": 13,
+      "type": "bargauge",
+      "title": "Sessions by Terminal Type",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 69
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count by (terminal_type) (count by (session_id, terminal_type) (increase(claude_code_token_usage_tokens_total{session_id=~\"$session.*\"}[$__range]) > 0))",
+          "refId": "A",
+          "legendFormat": "{{terminal_type}}",
+          "instant": true
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#8a8a86"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "lcd"
+      },
+      "description": "CHANGED from \"Sessions Started by Type\" (fresh/resume/continue via claude_code_session_count_total): that counter only fires once per session start, so the OTel collector's stale-stream eviction drops it within minutes and it's unqueryable over any real window regardless of PromQL - confirmed empty at every timestamp tested, including 1h ago during active use. Rebuilt on claude_code_token_usage_tokens_total instead (continuously re-exported, never goes stale) to show something reliable: distinct sessions per terminal (ghostty vs tmux)."
+    },
+    {
+      "id": 14,
+      "type": "logs",
+      "title": "Compaction Events (auto-compact firing = context outgrew the window)",
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 77
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{service_name=~\".+\"} | event_name=\"compaction\" | session_id=~\"$session.*\" | line_format \"{{.trigger}}  pre={{.pre_tokens}}tok -> post={{.post_tokens}}tok  ({{.duration_ms}}ms)  session={{.session_id}}\"",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "sortOrder": "Descending",
+        "enableLogDetails": true
+      },
+      "description": "FIXED: was an unreadable raw logs panel (every row just said \"claude_code.compaction\", detail hidden behind a click). line_format now bakes trigger/pre-post tokens/duration directly into the line - no expansion needed. Frequent auto-compactions on one session_id = it's running too long."
+    },
+    {
+      "id": 107,
+      "type": "row",
+      "title": "Code Productivity & Errors",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 83
+      }
+    },
+    {
+      "id": 29,
+      "type": "timeseries",
+      "title": "Lines of Code Added/Removed",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 84
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (type) (rate(claude_code_lines_of_code_count_total{session_id=~\"$session.*\"}[$__rate_interval])) * $__interval_ms / 1000",
+          "refId": "A",
+          "legendFormat": "{{type}}"
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#8a8a86"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "added"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#0ca30c"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "removed"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#d03b3b"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {}
+    },
+    {
+      "id": 30,
+      "type": "bargauge",
+      "title": "Edit Tool Decisions by Language",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 84
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "round(sum by (language, decision) (increase(claude_code_code_edit_tool_decision_total{session_id=~\"$session.*\"}[$__range])))",
+          "refId": "A",
+          "legendFormat": "{{language}} - {{decision}}"
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 40,
+      "type": "stat",
+      "title": "Git Activity",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "round(sum(increase(claude_code_commit_count_total{session_id=~\"$session.*\"}[$__range])))",
+          "legendFormat": "Commits",
+          "instant": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "round(sum(increase(claude_code_pull_request_count_total{session_id=~\"$session.*\"}[$__range])))",
+          "legendFormat": "Pull Requests",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#2a78d6"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "horizontal",
+        "textMode": "value_and_name",
+        "colorMode": "none",
+        "graphMode": "none"
+      },
+      "description": "MERGED from the separate Commits Created + Pull Requests Created stats. round() wraps increase() because these are counts of discrete, sparse events - raw increase() extrapolates fractional values (e.g. 2.6 commits).",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 84
+      }
+    },
+    {
+      "id": 33,
+      "type": "logs",
+      "title": "API Errors & Exhausted Retries",
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 91
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{service_name=~\".+\"} | event_name=~\"api_error|api_retries_exhausted\" | session_id=~\"$session.*\" | line_format \"{{.model}}  status={{.status_code}}  attempt={{.attempt}}  {{.error}}\"",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "sortOrder": "Descending",
+        "enableLogDetails": true
+      },
+      "description": "FIXED: was a raw logs panel needing a click per row; model/status/attempt/error are now baked into the visible line."
+    }
+  ]
+}

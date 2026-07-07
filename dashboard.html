@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code Telemetry</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --card: #161b22;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --red: #f85149;
+    --purple: #a371f7;
+    --orange: #db6d28;
+    --pink: #e87ba4;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+    min-height: 100vh;
+  }
+  .header {
+    display: flex; align-items: center; gap: 16px;
+    margin-bottom: 24px;
+  }
+  .header h1 { font-size: 24px; font-weight: 600; }
+  .live-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--green); animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .header .subtitle { font-size: 13px; color: var(--muted); margin-left: 8px; }
+
+  .kpi-row {
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px;
+    margin-bottom: 24px;
+  }
+  .kpi-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px;
+  }
+  .kpi-card .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .kpi-card .value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+  .kpi-card .delta { font-size: 12px; margin-top: 2px; }
+  .delta.up { color: var(--green); }
+  .delta.down { color: var(--red); }
+
+  .grid-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .grid-2-alt { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .grid-full { margin-bottom: 24px; }
+
+  .panel {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px;
+  }
+  .panel h3 { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--text); }
+  .chart { width: 100%; }
+
+  .session-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .session-table th { text-align: left; color: var(--muted); font-weight: 500; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .session-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .session-table tr:hover td { background: rgba(255,255,255,0.03); }
+  .session-table .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; color: var(--accent); }
+  .session-table .bar-cell { width: 100px; }
+  .session-table .bar-bg { height: 6px; border-radius: 3px; background: var(--border); }
+  .session-table .bar-fill { height: 6px; border-radius: 3px; background: var(--accent); }
+
+  .tag {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-size: 11px; font-weight: 500;
+  }
+  .tag.green { background: rgba(63,185,80,0.15); color: var(--green); }
+  .tag.yellow { background: rgba(210,153,34,0.15); color: var(--yellow); }
+  .tag.red { background: rgba(248,81,73,0.15); color: var(--red); }
+  .tag.purple { background: rgba(163,113,247,0.15); color: var(--purple); }
+
+  .footer { text-align: center; font-size: 12px; color: var(--muted); margin-top: 24px; }
+
+  .empty-state { text-align: center; padding: 40px; color: var(--muted); }
+  .empty-state .icon { font-size: 32px; margin-bottom: 8px; }
+
+  @media (max-width: 1200px) {
+    .kpi-row { grid-template-columns: repeat(3, 1fr); }
+    .grid-2, .grid-2-alt { grid-template-columns: 1fr; }
+    .grid-3 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="live-dot"></div>
+  <h1>Claude Code Telemetry</h1>
+  <span class="subtitle" id="lastUpdate">loading...</span>
+</div>
+
+<div class="kpi-row">
+  <div class="kpi-card"><div class="label">Total Cost</div><div class="value" id="kpiCost">$—</div></div>
+  <div class="kpi-card"><div class="label">Total Tokens</div><div class="value" id="kpiTokens">—</div></div>
+  <div class="kpi-card"><div class="label">Cache Hit %</div><div class="value" id="kpiCache">—</div></div>
+  <div class="kpi-card"><div class="label">Active Sessions</div><div class="value" id="kpiSessions">—</div></div>
+  <div class="kpi-card"><div class="label">Active Time</div><div class="value" id="kpiActiveTime">—</div></div>
+  <div class="kpi-card"><div class="label">Sessions Today</div><div class="value" id="kpiSessionsToday">—</div></div>
+</div>
+
+<div class="grid-2">
+  <div class="panel">
+    <h3>Token Flow</h3>
+    <div class="chart" id="chartTokenFlow" style="height:300px"></div>
+  </div>
+  <div class="panel">
+    <h3>Token Split by Model</h3>
+    <div class="chart" id="chartModelDonut" style="height:300px"></div>
+  </div>
+</div>
+
+<div class="grid-2">
+  <div class="panel">
+    <h3>Top Sessions</h3>
+    <div id="sessionTable"></div>
+  </div>
+  <div class="panel">
+    <h3>Session Starts</h3>
+    <div class="chart" id="chartSessionStarts" style="height:200px"></div>
+    <h3 style="margin-top:16px">Compaction Events</h3>
+    <div class="chart" id="chartCompactions" style="height:200px"></div>
+  </div>
+</div>
+
+<div class="grid-3">
+  <div class="panel">
+    <h3>Tool Call Count</h3>
+    <div class="chart" id="chartToolCount" style="height:280px"></div>
+  </div>
+  <div class="panel">
+    <h3>Tool Result Size</h3>
+    <div class="chart" id="chartToolSize" style="height:280px"></div>
+  </div>
+  <div class="panel">
+    <h3>Avg Tool Duration</h3>
+    <div class="chart" id="chartToolDuration" style="height:280px"></div>
+  </div>
+</div>
+
+<div class="grid-2-alt">
+  <div class="panel">
+    <h3>Model Comparison</h3>
+    <div class="chart" id="chartModelComparison" style="height:300px"></div>
+  </div>
+  <div class="panel">
+    <h3>Time to First Token</h3>
+    <div class="chart" id="chartTTFT" style="height:300px"></div>
+  </div>
+</div>
+
+<div class="grid-full">
+  <div class="panel">
+    <h3>Trace Explorer — Recent Interactions</h3>
+    <div class="chart" id="chartTraceGantt" style="height:400px"></div>
+  </div>
+</div>
+
+<div class="footer">
+  <span id="lastUpdateFooter">—</span> &middot; Prometheus:9090 &middot; Loki:3100 &middot; Tempo:3200 &middot; Phoenix:6006
+</div>
+
+<script>
+// ── API helpers ──────────────────────────────────────────────────────────────
+const PROXY = 'http://localhost:8090';
+const PROM = 'http://localhost:9090';
+
+async function promQuery(query) {
+  const url = `${PROM}/api/v1/query?query=${encodeURIComponent(query)}`;
+  const r = await fetch(url);
+  const d = await r.json();
+  return d.data?.result || [];
+}
+
+async function promRange(query, start, end, step) {
+  const url = `${PROM}/api/v1/query_range?query=${encodeURIComponent(query)}&start=${start}&end=${end}&step=${step}`;
+  const r = await fetch(url);
+  const d = await r.json();
+  return d.data?.result || [];
+}
+
+async function lokiQuery(query, start, end, limit = 50) {
+  const url = `${PROXY}/loki/loki/api/v1/query_range?query=${encodeURIComponent(query)}&start=${start}&end=${end}&limit=${limit}`;
+  const r = await fetch(url);
+  const d = await r.json();
+  return d.data?.result || [];
+}
+
+async function tempoSearch(query, start, end, limit = 50) {
+  const q = encodeURIComponent(query);
+  const url = `${PROXY}/tempo/api/search?q=${q}&start=${start}&end=${end}&limit=${limit}`;
+  const r = await fetch(url);
+  const d = await r.json();
+  return d.traces || [];
+}
+
+// ── Formatting ───────────────────────────────────────────────────────────────
+const fmtNum = n => { if (n >= 1e6) return (n/1e6).toFixed(1) + 'M'; if (n >= 1e3) return (n/1e3).toFixed(1) + 'K'; return n?.toFixed(0) || '0'; };
+const fmtUSD = n => n ? '$' + n.toFixed(2) : '$0.00';
+const fmtPct = n => n ? (n*100).toFixed(1) + '%' : '0%';
+const fmtDur = n => { if (n >= 3600) return (n/3600).toFixed(1)+'h'; if (n >= 60) return (n/60).toFixed(0)+'m'; return n?.toFixed(0)+'s' || '0s'; };
+const fmtMs = n => n ? n.toFixed(0) + 'ms' : '0ms';
+const fmtBytes = n => { if (n >= 1e6) return (n/1e6).toFixed(1)+'MB'; if (n >= 1e3) return (n/1e3).toFixed(1)+'KB'; return n+'B'; };
+
+// ── Time range ───────────────────────────────────────────────────────────────
+const now = Math.floor(Date.now() / 1000);
+const H24 = now - 86400;
+const H1 = now - 3600;
+const H6 = now - 21600;
+
+// ── Tool colors ──────────────────────────────────────────────────────────────
+const TOOL_COLORS = {
+  'Read': '#2a78d6', 'Bash': '#1baf7a', 'Edit': '#eda100',
+  'Grep': '#008300', 'Write': '#4a3aa7', 'Glob': '#e34948',
+  'WebFetch': '#e87ba4', 'WebSearch': '#eb6834',
+  'Skill': '#a371f7', 'Task': '#db6d28', 'Agent': '#58a6ff'
+};
+function toolColor(name) { return TOOL_COLORS[name] || '#8a8a86'; }
+
+// ── Chart instances ──────────────────────────────────────────────────────────
+const charts = {};
+
+function initChart(id) {
+  const el = document.getElementById(id);
+  if (!el) return null;
+  if (charts[id]) charts[id].dispose();
+  const c = echarts.init(el, 'dark');
+  charts[id] = c;
+  return c;
+}
+
+// ── KPIs ─────────────────────────────────────────────────────────────────────
+async function loadKPIs() {
+  const [cost, tokens, cache, sessions, activeTime, sessionsToday] = await Promise.all([
+    promQuery(`sum(claude_code_cost_usage_USD_total)`),
+    promQuery(`sum(claude_code_token_usage_tokens_total)`),
+    promQuery(`sum(increase(claude_code_token_usage_tokens_total{type="cacheRead"}[${H24}s])) / sum(increase(claude_code_token_usage_tokens_total[${H24}s]))`),
+    promQuery(`count(count by(session_id)(claude_code_token_usage_tokens_total))`),
+    promQuery(`sum(claude_code_active_time_seconds_total)`),
+    promQuery(`sum(increase(claude_code_session_count_total[${H24}s]))`),
+  ]);
+
+  document.getElementById('kpiCost').textContent = fmtUSD(cost[0]?.value?.[1]);
+  document.getElementById('kpiTokens').textContent = fmtNum(tokens[0]?.value?.[1]);
+  document.getElementById('kpiCache').textContent = fmtPct(cache[0]?.value?.[1]);
+  document.getElementById('kpiSessions').textContent = sessions[0]?.value?.[1] || '0';
+  document.getElementById('kpiActiveTime').textContent = fmtDur(activeTime[0]?.value?.[1]);
+  document.getElementById('kpiSessionsToday').textContent = sessionsToday[0]?.value?.[1] || '0';
+}
+
+// ── Token Flow Chart ─────────────────────────────────────────────────────────
+async function loadTokenFlow() {
+  const c = initChart('chartTokenFlow');
+  if (!c) return;
+  const data = await promRange(
+    `sum by (type) (rate(claude_code_token_usage_tokens_total[5m])) * 300`,
+    H24, now, 300
+  );
+  const types = ['input', 'output', 'cacheRead', 'cacheCreation'];
+  const typeColors = { input: '#2a78d6', output: '#1baf7a', cacheRead: '#eda100', cacheCreation: '#008300' };
+  const series = types.map(type => {
+    const match = data.find(d => d.metric?.type === type);
+    return {
+      name: type, type: 'line', stack: 'tokens',
+      areaStyle: { opacity: 0.3 },
+      lineStyle: { width: 1 },
+      symbol: 'none',
+      smooth: true,
+      data: match?.values?.map(v => [v[0]*1000, parseFloat(v[1])]) || [],
+      color: typeColors[type] || '#8a8a86',
+    };
+  });
+  c.setOption({
+    tooltip: { trigger: 'axis' },
+    legend: { bottom: 0, textStyle: { color: '#8b949e', fontSize: 11 } },
+    grid: { left: 60, right: 20, top: 10, bottom: 30 },
+    xAxis: { type: 'time', axisLabel: { color: '#8b949e', fontSize: 10 } },
+    yAxis: { type: 'value', axisLabel: { color: '#8b949e', formatter: fmtNum } },
+    series,
+  });
+}
+
+// ── Model Donut ──────────────────────────────────────────────────────────────
+async function loadModelDonut() {
+  const c = initChart('chartModelDonut');
+  if (!c) return;
+  const data = await promQuery(
+    `sum by (model) (increase(claude_code_token_usage_tokens_total[${H24}s]))`
+  );
+  const items = data.map(d => ({
+    name: (d.metric?.model || 'unknown').replace(/\[.*\]/, ''),
+    value: parseFloat(d.value?.[1] || 0),
+  })).sort((a,b) => b.value - a.value);
+  c.setOption({
+    tooltip: { trigger: 'item', formatter: p => `${p.name}: ${fmtNum(p.value)} (${p.percent}%)` },
+    series: [{
+      type: 'pie', radius: ['40%', '70%'],
+      center: ['50%', '55%'],
+      label: { color: '#8b949e', fontSize: 10 },
+      data: items,
+    }],
+  });
+}
+
+// ── Session Table ────────────────────────────────────────────────────────────
+async function loadSessionTable() {
+  const data = await promQuery(
+    `topk(15, sum by (session_id, terminal_type) (increase(claude_code_token_usage_tokens_total[${H24}s])))`
+  );
+  const max = Math.max(...data.map(d => parseFloat(d.value?.[1] || 0)), 1);
+  const rows = data.map(d => {
+    const sid = d.metric?.session_id?.slice(0,8) || '?';
+    const val = parseFloat(d.value?.[1] || 0);
+    const term = d.metric?.terminal_type || '?';
+    return `<tr>
+      <td><span class="mono">${sid}</span></td>
+      <td>${term}</td>
+      <td>${fmtNum(val)}</td>
+      <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width:${(val/max*100).toFixed(0)}%"></div></div></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('sessionTable').innerHTML = `
+    <table class="session-table">
+      <thead><tr><th>Session</th><th>Term</th><th>Tokens</th><th></th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="4" class="empty-state">No sessions</td></tr>'}</tbody>
+    </table>`;
+}
+
+// ── Session Starts ───────────────────────────────────────────────────────────
+async function loadSessionStarts() {
+  const c = initChart('chartSessionStarts');
+  if (!c) return;
+  const data = await promRange(
+    `sum by (start_type) (rate(claude_code_session_count_total[5m])) * 300`,
+    H24, now, 300
+  );
+  const startColors = { fresh: '#2a78d6', resume: '#eb6834', continue: '#eda100' };
+  const types = ['fresh', 'resume', 'continue'];
+  const series = types.map(type => {
+    const match = data.find(d => d.metric?.start_type === type);
+    return {
+      name: type, type: 'bar', stack: 'starts',
+      barWidth: '80%',
+      data: match?.values?.map(v => [v[0]*1000, parseFloat(v[1])]) || [],
+      color: startColors[type] || '#8a8a86',
+    };
+  });
+  c.setOption({
+    tooltip: { trigger: 'axis' },
+    legend: { bottom: 0, textStyle: { color: '#8b949e', fontSize: 10 } },
+    grid: { left: 40, right: 10, top: 10, bottom: 30 },
+    xAxis: { type: 'time', axisLabel: { color: '#8b949e', fontSize: 10 } },
+    yAxis: { type: 'value', axisLabel: { color: '#8b949e', fontSize: 10 } },
+    series,
+  });
+}
+
+// ── Compaction Events ────────────────────────────────────────────────────────
+async function loadCompactions() {
+  const c = initChart('chartCompactions');
+  if (!c) return;
+  const logs = await lokiQuery(
+    `{service_name="claude-code"} | event_name="compaction"`,
+    H24, now
+  );
+  const buckets = {};
+  for (const r of logs) {
+    for (const [ts, _] of r.values || []) {
+      const hour = Math.floor(parseInt(ts) / 3.6e12) * 3.6e12;
+      buckets[hour] = (buckets[hour] || 0) + 1;
+    }
+  }
+  const data = Object.entries(buckets).map(([t,c]) => [parseInt(t), c]).sort((a,b) => a[0]-b[0]);
+  c.setOption({
+    tooltip: { trigger: 'axis' },
+    grid: { left: 40, right: 10, top: 10, bottom: 30 },
+    xAxis: { type: 'time', axisLabel: { color: '#8b949e', fontSize: 10 } },
+    yAxis: { type: 'value', axisLabel: { color: '#8b949e', fontSize: 10 } },
+    series: [{ type: 'bar', data, color: '#f85149', barWidth: '80%' }],
+  });
+}
+
+// ── Tool Breakdown ───────────────────────────────────────────────────────────
+async function loadToolBreakdown() {
+  const [countData, sizeData, durData] = await Promise.all([
+    lokiQuery(`sum by (tool_name) (count_over_time({service_name="claude-code"} | event_name="tool_result" [${H24}s]))`, H24, now),
+    lokiQuery(`sum by (tool_name) (sum_over_time({service_name="claude-code"} | event_name="tool_result" | unwrap tool_result_size_bytes [${H24}s]))`, H24, now),
+    lokiQuery(`avg by (tool_name) (avg_over_time({service_name="claude-code"} | event_name="tool_result" | unwrap duration_ms [${H24}s]))`, H24, now),
+  ]);
+
+  function toolChart(id, title, data, unit, fmt) {
+    const c = initChart(id);
+    if (!c) return;
+    const items = (data[0]?.values || [[0,'{}']]).map(v => {
+      try { return JSON.parse(v[1]); } catch { return {}; }
+    });
+    const merged = {};
+    for (const item of items) Object.assign(merged, item);
+    const sorted = Object.entries(merged)
+      .map(([name, val]) => ({ name, value: parseFloat(val) }))
+      .sort((a,b) => b.value - a.value)
+      .slice(0, 10);
+    c.setOption({
+      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+      grid: { left: 90, right: 20, top: 5, bottom: 5 },
+      xAxis: { type: 'value', axisLabel: { color: '#8b949e', fontSize: 10, formatter: fmt } },
+      yAxis: { type: 'category', data: sorted.map(d=>d.name).reverse(),
+               axisLabel: { color: '#8b949e', fontSize: 10 } },
+      series: [{
+        type: 'bar', data: sorted.map(d => ({
+          value: d.value, itemStyle: { color: toolColor(d.name) }
+        })).reverse(),
+      }],
+    });
+  }
+
+  toolChart('chartToolCount', 'Tool Call Count', countData, 'short', fmtNum);
+  toolChart('chartToolSize', 'Tool Result Size', sizeData, 'bytes', fmtBytes);
+  toolChart('chartToolDuration', 'Avg Tool Duration', durData, 'ms', fmtMs);
+}
+
+// ── Model Comparison ─────────────────────────────────────────────────────────
+async function loadModelComparison() {
+  const c = initChart('chartModelComparison');
+  if (!c) return;
+  const data = await promQuery(
+    `sum by (model) (increase(claude_code_token_usage_tokens_total[${H24}s]))`
+  );
+  const models = data.map(d => ({
+    name: (d.metric?.model || '?').replace(/\[.*\]/, ''),
+    tokens: parseFloat(d.value?.[1] || 0),
+  })).sort((a,b) => b.tokens - a.tokens);
+  c.setOption({
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    legend: { bottom: 0, textStyle: { color: '#8b949e', fontSize: 10 } },
+    grid: { left: 90, right: 20, top: 10, bottom: 30 },
+    xAxis: { type: 'value', axisLabel: { color: '#8b949e', formatter: fmtNum } },
+    yAxis: { type: 'category', data: models.map(m=>m.name).reverse(),
+             axisLabel: { color: '#8b949e', fontSize: 10 } },
+    series: [{
+      type: 'bar', data: models.map(m => m.tokens).reverse(),
+      itemStyle: { color: '#58a6ff' },
+    }],
+  });
+}
+
+// ── TTFT Heatmap ─────────────────────────────────────────────────────────────
+async function loadTTFT() {
+  const c = initChart('chartTTFT');
+  if (!c) return;
+  const traces = await tempoSearch(
+    `{ name = "claude_code.llm_request" }`,
+    H1, now, 100
+  );
+  const ttftByModel = {};
+  for (const t of traces) {
+    const dur = t.durationMs || 0;
+    const model = 'unknown'; // Tempo search doesn't return attributes; would need full trace fetch
+    if (!ttftByModel[model]) ttftByModel[model] = [];
+    ttftByModel[model].push(dur);
+  }
+  const items = Object.entries(ttftByModel).flatMap(([model, durs]) =>
+    durs.map(d => [model, d])
+  );
+  c.setOption({
+    tooltip: { trigger: 'item' },
+    grid: { left: 100, right: 20, top: 10, bottom: 10 },
+    xAxis: { type: 'category', data: ['All Models'], axisLabel: { color: '#8b949e' } },
+    yAxis: { type: 'value', name: 'ms', axisLabel: { color: '#8b949e' } },
+    series: [{
+      type: 'scatter', data: items.map(([_,d]) => ['All Models', d]),
+      symbolSize: 6, itemStyle: { color: '#58a6ff', opacity: 0.6 },
+    }],
+  });
+}
+
+// ── Trace Gantt ──────────────────────────────────────────────────────────────
+async function loadTraceGantt() {
+  const c = initChart('chartTraceGantt');
+  if (!c) return;
+  const traces = await tempoSearch(
+    `{ name = "claude_code.interaction" }`,
+    H6, now, 20
+  );
+
+  // Fetch full trace details for each interaction
+  const traceDetails = await Promise.all(
+    traces.slice(0, 10).map(async t => {
+      try {
+        const r = await fetch(`${PROXY}/tempo/api/traces/${t.traceID}`);
+        const d = await r.json();
+        const spans = [];
+        for (const b of d.batches || []) {
+          for (const ss of b.scopeSpans || []) {
+            for (const s of ss.spans || []) {
+              const attrs = {};
+              for (const a of s.attributes || []) {
+                const v = a.value;
+                attrs[a.key] = v?.stringValue || v?.intValue || v?.doubleValue || '';
+              }
+              spans.push({
+                name: s.name,
+                start: parseInt(s.startTimeUnixNano) / 1e6,
+                end: parseInt(s.endTimeUnixNano) / 1e6,
+                attrs,
+              });
+            }
+          }
+        }
+        return { traceID: t.traceID, durationMs: t.durationMs, spans };
+      } catch { return null; }
+    })
+  );
+
+  const valid = traceDetails.filter(Boolean).sort((a,b) => a.spans[0]?.start - b.spans[0]?.start);
+
+  // Build Gantt data: each span = [traceIndex, start, end, spanName]
+  const categories = [];
+  const seriesData = [];
+  const spanColors = {
+    'claude_code.interaction': '#8b949e',
+    'claude_code.llm_request': '#58a6ff',
+    'claude_code.tool': '#3fb950',
+    'claude_code.tool.execution': '#1baf7a',
+    'claude_code.tool.blocked_on_user': '#f85149',
+  };
+
+  valid.forEach((td, i) => {
+    const sid = td.traceID.slice(0,8);
+    const base = td.spans[0]?.start || 0;
+    categories.push(sid);
+    for (const s of td.spans) {
+      if (s.name === 'claude_code.interaction') continue; // too long, skews the view
+      seriesData.push({
+        name: s.name,
+        value: [i, (s.start - base), (s.end - base), s.attrs?.tool_name || s.attrs?.model || ''],
+        itemStyle: { color: spanColors[s.name] || '#8a8a86' },
+      });
+    }
+  });
+
+  const legendNames = [...new Set(seriesData.map(d => d.name))];
+  c.setOption({
+    tooltip: {
+      trigger: 'item',
+      formatter: p => {
+        const [_, start, end, label] = p.value || [];
+        return `${p.seriesName}<br/>${label}<br/>${start.toFixed(0)}ms → ${end.toFixed(0)}ms (${(end-start).toFixed(0)}ms)`;
+      }
+    },
+    legend: { bottom: 0, data: legendNames, textStyle: { color: '#8b949e', fontSize: 10 } },
+    grid: { left: 80, right: 20, top: 10, bottom: 35 },
+    xAxis: { type: 'value', name: 'ms', axisLabel: { color: '#8b949e', fontSize: 10 } },
+    yAxis: {
+      type: 'category', data: categories,
+      axisLabel: { color: '#8b949e', fontSize: 10, fontFamily: 'monospace' },
+    },
+    series: legendNames.map(name => ({
+      name, type: 'custom',
+      renderItem: (params, api) => {
+        const idx = api.value(0);
+        const start = api.value(1);
+        const end = api.value(2);
+        const y = api.coord([0, idx])[1];
+        const x1 = api.coord([start, 0])[0];
+        const x2 = api.coord([end, 0])[0];
+        const height = Math.min(api.size([0,1])[1] * 0.5, 16);
+        return {
+          type: 'rect', shape: { x: x1, y: y - height/2, width: Math.max(x2 - x1, 2), height },
+          style: api.style(),
+        };
+      },
+      data: seriesData.filter(d => d.name === name),
+      encode: { x: [1, 2], y: 0 },
+    })),
+  });
+}
+
+// ── Refresh all ──────────────────────────────────────────────────────────────
+async function refreshAll() {
+  const now = new Date();
+  const ts = now.toLocaleTimeString();
+  document.getElementById('lastUpdate').textContent = `Last update: ${ts}`;
+  document.getElementById('lastUpdateFooter').textContent = `Updated ${ts}`;
+
+  await Promise.allSettled([
+    loadKPIs(),
+    loadTokenFlow(),
+    loadModelDonut(),
+    loadSessionTable(),
+    loadSessionStarts(),
+    loadCompactions(),
+    loadToolBreakdown(),
+    loadModelComparison(),
+    loadTTFT(),
+    loadTraceGantt(),
+  ]);
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+refreshAll();
+setInterval(refreshAll, 30000);
+
+// Resize handler
+window.addEventListener('resize', () => {
+  Object.values(charts).forEach(c => c?.resize());
+});
+</script>
+</body>
+</html>

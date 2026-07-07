@@ -1,0 +1,52 @@
+# Claude Code telemetry stack: Grafana LGTM (Loki/Grafana/Tempo/Mimir-Prometheus)
+# for metrics+logs+traces, plus Arize Phoenix for LLM trace inspection.
+# Images are pinned for reproducible sharing; bump deliberately and re-test.
+services:
+  lgtm:
+    image: grafana/otel-lgtm:0.28.0
+    container_name: claude-code-lgtm
+    restart: unless-stopped
+    ports:
+      - "3000:3000"   # Grafana UI
+      - "4317:4317"   # OTLP gRPC   (Claude Code -> collector)
+      - "4318:4318"   # OTLP HTTP   (Claude Code -> collector)
+      - "9090:9090"   # Prometheus API (debugging)
+      - "3100:3100"   # Loki API (debugging)
+      - "3200:3200"   # Tempo API (debugging)
+    environment:
+      # Open the Claude Code dashboard as the landing page.
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/otel-lgtm/grafana/conf/provisioning/dashboards/custom/claude-code.json
+      # No-login access so a freshly cloned stack just works.
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_AUTH_BASIC_ENABLED=false
+      # Route Claude Code's structured log events into Loki.
+      - ENABLE_LOGS_OTELCOL=true
+      - ENABLE_LOGS_PROMETHEUS=true
+    volumes:
+      - lgtm-data:/data
+      - ./grafana-dashboards/claude-code.json:/otel-lgtm/grafana/conf/provisioning/dashboards/custom/claude-code.json:ro
+      - ./grafana-dashboards/provisioning.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/custom.yaml:ro
+      - ./otelcol-config.yaml:/otel-lgtm/otelcol-config.yaml:ro
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
+
+  phoenix:
+    image: arizephoenix/phoenix:version-17.17.0
+    container_name: claude-code-phoenix
+    restart: unless-stopped
+    ports:
+      - "6006:6006"   # Phoenix UI + OTLP HTTP trace ingestion (/v1/traces)
+    environment:
+      - PHOENIX_WORKING_DIR=/mnt/data
+    volumes:
+      - phoenix-data:/mnt/data
+
+volumes:
+  lgtm-data:
+  phoenix-data:

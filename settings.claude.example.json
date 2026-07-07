@@ -1,0 +1,19 @@
+{
+  "//": "Copy this env block into your Claude Code settings so telemetry flows to the local stack.",
+  "//1": "Global (all projects):  ~/.claude/settings.json   ·   Per-project:  <repo>/.claude/settings.json",
+  "//2": "Or run ./setup.sh, which merges this into ~/.claude/settings.json for you (with a backup).",
+  "env": {
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+    "CLAUDE_CODE_ENHANCED_TELEMETRY_BETA": "1",
+    "OTEL_METRICS_EXPORTER": "otlp",
+    "OTEL_LOGS_EXPORTER": "otlp",
+    "OTEL_TRACES_EXPORTER": "otlp",
+    "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318",
+    "OTEL_METRIC_EXPORT_INTERVAL": "10000",
+    "OTEL_LOGS_EXPORT_INTERVAL": "5000",
+    "OTEL_TRACES_EXPORT_INTERVAL": "5000",
+    "OTEL_LOG_USER_PROMPTS": "1",
+    "OTEL_LOG_TOOL_DETAILS": "1"
+  }
+}

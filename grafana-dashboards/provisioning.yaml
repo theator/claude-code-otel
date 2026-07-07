@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: "Claude Code"
+    type: file
+    updateIntervalSeconds: 10
+    options:
+      path: /otel-lgtm/grafana/conf/provisioning/dashboards/custom

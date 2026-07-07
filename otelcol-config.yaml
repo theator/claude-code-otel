@@ -1,0 +1,92 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins:
+            - http://*
+  prometheus/collector:
+    config:
+      scrape_configs:
+        - job_name: "opentelemetry-collector"
+          scrape_interval: 1s
+          static_configs:
+            - targets: ["127.0.0.1:8888"]
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+    path: "/ready"
+
+processors:
+  batch:
+  # Claude Code's SDK exports counters (token/cost/session/etc.) with delta
+  # temporality. Prometheus's native OTLP receiver only accepts cumulative
+  # sums and 500s on anything else ("invalid temporality and type
+  # combination"), so convert delta->cumulative before it reaches Prometheus.
+  deltatocumulative:
+  # Claude Code's llm_request spans already carry openinference.span.kind=LLM
+  # (that's why Phoenix labels them "llm") but the token counts are flat,
+  # unprefixed attributes, not OpenInference's llm.token_count.* naming Phoenix
+  # reads for its tokens/cost columns. Copy them across so Phoenix can use them.
+  # Harmless no-op for Tempo, which doesn't care about attribute naming.
+  transform/openinference_tokens:
+    trace_statements:
+      - context: span
+        statements:
+          - set(attributes["llm.token_count.prompt"], attributes["input_tokens"]) where attributes["input_tokens"] != nil
+          - set(attributes["llm.token_count.completion"], attributes["output_tokens"]) where attributes["output_tokens"] != nil
+          - set(attributes["llm.token_count.prompt_details.cache_read"], attributes["cache_read_tokens"]) where attributes["cache_read_tokens"] != nil
+          - set(attributes["llm.token_count.prompt_details.cache_write"], attributes["cache_creation_tokens"]) where attributes["cache_creation_tokens"] != nil
+
+exporters:
+  otlp_http/metrics:
+    endpoint: http://127.0.0.1:9090/api/v1/otlp
+    tls:
+      insecure: true
+  otlp_http/traces:
+    endpoint: http://127.0.0.1:4418
+    tls:
+      insecure: true
+  otlp_http/phoenix:
+    # otlphttp auto-appends /v1/traces to this base endpoint (same pattern as
+    # otlp_http/traces above, which works against Tempo without a path).
+    endpoint: http://phoenix:6006
+    tls:
+      insecure: true
+  otlp_http/logs:
+    endpoint: http://127.0.0.1:3100/otlp
+    tls:
+      insecure: true
+  otlp/profiles:
+    endpoint: http://127.0.0.1:4040
+    tls:
+      insecure: true
+  debug/metrics:
+    verbosity: detailed
+  debug/traces:
+    verbosity: detailed
+  debug/logs:
+    verbosity: detailed
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [transform/openinference_tokens, batch]
+      exporters: [otlp_http/traces, otlp_http/phoenix]
+    metrics:
+      receivers: [otlp, prometheus/collector]
+      processors: [deltatocumulative, batch]
+      exporters: [otlp_http/metrics]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp_http/logs]
+    profiles:
+      receivers: [otlp]
+      exporters: [otlp/profiles]
