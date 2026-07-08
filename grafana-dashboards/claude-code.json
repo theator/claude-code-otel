@@ -700,6 +700,28 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "Tokens"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "gradient",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-blues"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "Cost"
             },
             "properties": [
@@ -903,19 +925,90 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Time"
+              "options": "MCP Server"
             },
             "properties": [
               {
-                "id": "custom.hidden",
+                "id": "displayName",
+                "value": "MCP Server"
+              },
+              {
+                "id": "custom.filterable",
                 "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Tool"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Tool"
+              },
+              {
+                "id": "custom.filterable",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Tokens"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "gradient",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-blues"
+                }
               }
             ]
           }
         ]
       },
-      "options": {},
-      "description": "Per-MCP-tool token attribution (e.g. Grafana get_dashboard_by_uid vs narrower tools)."
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "sortBy": [
+          {
+            "displayName": "Tokens",
+            "desc": true
+          }
+        ]
+      },
+      "description": "Per-MCP-tool token attribution (e.g. Grafana get_dashboard_by_uid vs narrower tools).",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "mcp_server_name": 0,
+              "mcp_tool_name": 1,
+              "Value": 2
+            },
+            "renameByName": {
+              "mcp_server_name": "MCP Server",
+              "mcp_tool_name": "Tool",
+              "Value": "Tokens"
+            }
+          }
+        }
+      ]
     },
     {
       "id": 104,
@@ -1099,6 +1192,48 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Avg Duration"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ms"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "gradient",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-GrYlRd"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Tool"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Tool"
+              },
+              {
+                "id": "custom.filterable",
+                "value": true
+              }
+            ]
           }
         ]
       },
@@ -1166,7 +1301,21 @@
               },
               {
                 "id": "custom.width",
-                "value": 110
+                "value": 150
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "gradient",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-GrYlRd"
+                }
               }
             ]
           },
@@ -1182,7 +1331,11 @@
               },
               {
                 "id": "custom.width",
-                "value": 90
+                "value": 110
+              },
+              {
+                "id": "custom.filterable",
+                "value": true
               }
             ]
           },
@@ -1199,9 +1352,16 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "text",
-                  "wrapText": true
+                  "type": "auto"
                 }
+              },
+              {
+                "id": "custom.wrapText",
+                "value": true
+              },
+              {
+                "id": "custom.inspect",
+                "value": true
               }
             ]
           }
@@ -1217,11 +1377,12 @@
               "traceName": true,
               "spanID": true,
               "name": true,
-              "time": true
+              "time": true,
+              "session.id": true
             },
             "indexByName": {
-              "duration": 0,
-              "tool_name": 1,
+              "tool_name": 0,
+              "duration": 1,
               "full_command": 2
             }
           }
@@ -1237,7 +1398,7 @@
           }
         ]
       },
-      "description": "Every claude_code.tool span (any tool, not just Bash), one row per actual call, sorted slowest-first. Source: Tempo tableType=spans so tool_name and full_command are flat columns. full_command is only populated for Bash (needs OTEL_LOG_TOOL_DETAILS=1); other tools still show their duration and name."
+      "description": "Every claude_code.tool span (any tool), one row per call, slowest-first with a duration bar. full_command wraps to full multi-line and has a cell-inspect magnifier (click the icon to read the whole command in a modal). full_command is Bash-only and needs OTEL_LOG_TOOL_DETAILS=1; other tools still show duration + name. Filter by Tool via the column header."
     },
     {
       "id": 19,
@@ -1336,7 +1497,7 @@
             "type": "tempo",
             "uid": "tempo"
           },
-          "query": "{ name = \"claude_code.interaction\" && span.user_prompt != nil && span.session.id =~ \"$session.*\" } | select(span.user_prompt)",
+          "query": "{ name = \"claude_code.interaction\" && span.user_prompt != nil && span.user_prompt !~ \"<.*\" && span.session.id =~ \"$session.*\" } | select(span.user_prompt)",
           "queryType": "traceql",
           "tableType": "spans",
           "refId": "A",
@@ -1366,7 +1527,21 @@
               },
               {
                 "id": "custom.width",
-                "value": 130
+                "value": 150
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "gradient",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-GrYlRd"
+                }
               }
             ]
           },
@@ -1383,9 +1558,16 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "text",
-                  "wrapText": true
+                  "type": "auto"
                 }
+              },
+              {
+                "id": "custom.wrapText",
+                "value": true
+              },
+              {
+                "id": "custom.inspect",
+                "value": true
               }
             ]
           }
@@ -1401,7 +1583,8 @@
               "traceName": true,
               "spanID": true,
               "name": true,
-              "time": true
+              "time": true,
+              "session.id": true
             },
             "indexByName": {
               "duration": 0,
@@ -1420,7 +1603,7 @@
           }
         ]
       },
-      "description": "The actual user prompt text for the slowest turns, one row per turn, sorted slowest-first. Source: claude_code.interaction spans queried with Tempo tableType=spans (which flattens the selected span.user_prompt attribute into a real column instead of nesting it behind a click). Duration IS the turn's wall-clock time from prompt to final response. Prompt text is present only because OTEL_LOG_USER_PROMPTS=1."
+      "description": "The actual user prompt text for the slowest turns, one row per turn, slowest-first with a duration bar. Prompt text wraps in full and has a cell-inspect magnifier. Harness-injected turns (<task-notification>, slash-command scaffolding, etc.) are filtered out at query time (span.user_prompt !~ \"<.*\") so only real prompts rank. Requires OTEL_LOG_USER_PROMPTS=1."
     },
     {
       "id": 37,
@@ -1468,7 +1651,21 @@
               },
               {
                 "id": "custom.width",
-                "value": 140
+                "value": 160
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "gradient",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-GrYlRd"
+                }
               }
             ]
           },
@@ -1481,6 +1678,14 @@
               {
                 "id": "displayName",
                 "value": "Decision"
+              },
+              {
+                "id": "custom.width",
+                "value": 140
+              },
+              {
+                "id": "custom.filterable",
+                "value": true
               }
             ]
           }
@@ -1496,7 +1701,8 @@
               "traceName": true,
               "spanID": true,
               "name": true,
-              "time": true
+              "time": true,
+              "session.id": true
             },
             "indexByName": {
               "duration": 0,
@@ -1536,7 +1742,8 @@
           "query": "{ name = \"claude_code.tool\" && span.tool_name = \"Agent\" } >> { name = \"claude_code.llm_request\" } | select(span.model, span.input_tokens, span.output_tokens, span.duration_ms)",
           "queryType": "traceql",
           "refId": "A",
-          "limit": 200
+          "limit": 200,
+          "tableType": "spans"
         }
       ],
       "datasource": {
@@ -1545,10 +1752,94 @@
       },
       "fieldConfig": {
         "defaults": {},
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "duration"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ns"
+              },
+              {
+                "id": "displayName",
+                "value": "Duration"
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "gradient",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-GrYlRd"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "model"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Model"
+              },
+              {
+                "id": "custom.filterable",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "input_tokens"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Input tok"
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "output_tokens"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Output tok"
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          }
+        ]
       },
       "options": {
-        "showTypeIcons": true,
+        "showHeader": true,
+        "cellHeight": "sm",
         "sortBy": [
           {
             "displayName": "Duration",
@@ -1556,7 +1847,34 @@
           }
         ]
       },
-      "description": "FIXED: Claude Code has no flat agent_id span attribute (confirmed against the official Agent SDK observability docs) - the old query matched zero real spans and Grafana fell back to showing unrelated interaction spans. Subagent delegation is structural: a subagent's llm_request spans nest under the parent's claude_code.tool span where tool_name=\"Agent\". This query finds those descendant llm_request spans directly. Tempo nests the selected attributes (model, tokens, duration) under each row - click the expand arrow to see them."
+      "description": "Each subagent llm_request span (nested under a parent claude_code.tool where tool_name=\"Agent\"), flattened via tableType=spans into real columns: model, input/output tokens, and a duration bar. Slowest-first. A busy Agent row here = heavy delegation.",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "traceIdHidden": true,
+              "traceService": true,
+              "traceName": true,
+              "spanID": true,
+              "name": true,
+              "time": true,
+              "duration_ms": true
+            },
+            "indexByName": {
+              "duration": 0,
+              "model": 1,
+              "input_tokens": 2,
+              "output_tokens": 3
+            },
+            "renameByName": {
+              "model": "Model",
+              "input_tokens": "Input tok",
+              "output_tokens": "Output tok"
+            }
+          }
+        }
+      ]
     },
     {
       "id": 23,
@@ -1586,10 +1904,138 @@
       },
       "fieldConfig": {
         "defaults": {},
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "nested"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "traceID"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Trace ID"
+              },
+              {
+                "id": "custom.width",
+                "value": 300
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "startTime"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Start"
+              },
+              {
+                "id": "custom.width",
+                "value": 170
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "traceService"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Service"
+              },
+              {
+                "id": "custom.width",
+                "value": 130
+              },
+              {
+                "id": "custom.filterable",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "traceName"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Root span"
+              },
+              {
+                "id": "custom.width",
+                "value": 210
+              },
+              {
+                "id": "custom.filterable",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "traceDuration"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ms"
+              },
+              {
+                "id": "displayName",
+                "value": "Duration"
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "gradient",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-GrYlRd"
+                }
+              }
+            ]
+          }
+        ]
       },
-      "options": {},
-      "description": "Drill into one session's actual trace waterfall - the full interaction -> llm_request/tool -> tool.execution tree. Pick a session in the filter above to narrow this down. FIXED: queryType was \"traceqlSearch\", which is driven by a UI filter-builder state and silently ignores a hand-written query string, so this never actually filtered by session. Switched to \"traceql\", the raw-query mode that honors the query field as written."
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "sortBy": [
+          {
+            "displayName": "Start",
+            "desc": true
+          }
+        ]
+      },
+      "description": "One row per trace for the selected $session, newest-first, with a duration bar. Click a Trace ID to open the full waterfall (interaction -> llm_request/tool -> tool.execution) in Explore. FIXED: the raw 'nested' spans blob column is now hidden; it was rendering as unreadable JSON."
     },
     {
       "id": 106,
@@ -1711,6 +2157,26 @@
                 "value": "s"
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Terminal"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Terminal"
+              },
+              {
+                "id": "custom.width",
+                "value": 110
+              },
+              {
+                "id": "custom.filterable",
+                "value": true
+              }
+            ]
           }
         ]
       },
@@ -1738,7 +2204,9 @@
             "renameByName": {
               "Value #A": "Tokens",
               "Value #B": "Cost",
-              "Value #C": "Active Time"
+              "Value #C": "Active Time",
+              "session_id": "Session ID",
+              "terminal_type": "Terminal"
             }
           }
         }
@@ -1747,7 +2215,7 @@
     },
     {
       "id": 13,
-      "type": "bargauge",
+      "type": "piechart",
       "title": "Sessions by Terminal Type",
       "gridPos": {
         "h": 8,
@@ -1775,17 +2243,38 @@
         "defaults": {
           "unit": "short",
           "color": {
-            "mode": "fixed",
-            "fixedColor": "#8a8a86"
+            "mode": "palette-classic"
           }
         },
         "overrides": []
       },
       "options": {
-        "orientation": "horizontal",
-        "displayMode": "lcd"
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "pieType": "donut",
+        "displayLabels": [
+          "name",
+          "value"
+        ],
+        "legend": {
+          "displayMode": "list",
+          "placement": "right",
+          "values": [
+            "value"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
       },
-      "description": "CHANGED from \"Sessions Started by Type\" (fresh/resume/continue via claude_code_session_count_total): that counter only fires once per session start, so the OTel collector's stale-stream eviction drops it within minutes and it's unqueryable over any real window regardless of PromQL - confirmed empty at every timestamp tested, including 1h ago during active use. Rebuilt on claude_code_token_usage_tokens_total instead (continuously re-exported, never goes stale) to show something reliable: distinct sessions per terminal (ghostty vs tmux)."
+      "description": "Distinct sessions per terminal (ghostty vs tmux vs ...), as a donut so it stays readable regardless of how many terminal types appear. Built on token_usage (continuously re-exported) rather than the session-start counter, which goes stale within minutes."
     },
     {
       "id": 14,
