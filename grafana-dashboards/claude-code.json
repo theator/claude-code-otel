@@ -115,7 +115,7 @@
     {
       "id": 3,
       "type": "stat",
-      "title": "Total Tokens",
+      "title": "Fresh Tokens",
       "gridPos": {
         "h": 4,
         "w": 4,
@@ -128,7 +128,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(claude_code_token_usage_tokens_total{model=~\"$model\",session_id=~\"$session.*\"}[$__range]))",
+          "expr": "sum(increase(claude_code_token_usage_tokens_total{type!=\"cacheRead\",model=~\"$model\",session_id=~\"$session.*\"}[$__range]))",
           "refId": "A"
         }
       ],
@@ -151,7 +151,52 @@
           ]
         }
       },
-      "description": "FIXED: was a bare sum() of the raw counter - ignored the time picker and undercounted across process restarts. Now increase(...[$__range]), matching Total Cost's fix."
+      "description": "Input + output + cacheCreation over the selected window - the tokens the model actually read fresh or generated. Deliberately EXCLUDES cacheRead (see the Cache Reads tile): cacheRead re-counts the cached context prefix that cacheCreation already counted once, so summing both double-counts the same physical tokens and inflates a fresh session ~2x (a long one ~30x) versus what /context shows. increase() is reset-safe across the collector's delta->cumulative stream evictions."
+    },
+    {
+      "id": 50,
+      "type": "stat",
+      "title": "Cache Reads",
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 8,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(claude_code_token_usage_tokens_total{type=\"cacheRead\",model=~\"$model\",session_id=~\"$session.*\"}[$__range]))",
+          "refId": "A"
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#8a8a86"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "area",
+        "colorMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "description": "Tokens replayed from the prompt cache (billed ~10% of input). Kept separate from Fresh Tokens on purpose: every turn re-reads the whole cached prefix, so this grows fast and is typically ~95% of raw token volume. High cache reads mean caching is working - judge spend by Total Cost, not this count."
     },
     {
       "id": 7,
@@ -160,7 +205,7 @@
       "gridPos": {
         "h": 4,
         "w": 4,
-        "x": 8,
+        "x": 11,
         "y": 1
       },
       "targets": [
@@ -211,8 +256,8 @@
       "title": "Sessions in Range",
       "gridPos": {
         "h": 4,
-        "w": 4,
-        "x": 12,
+        "w": 3,
+        "x": 15,
         "y": 1
       },
       "targets": [
@@ -252,8 +297,8 @@
       "title": "Active Time",
       "gridPos": {
         "h": 4,
-        "w": 4,
-        "x": 16,
+        "w": 3,
+        "x": 18,
         "y": 1
       },
       "targets": [
@@ -293,8 +338,8 @@
       "title": "Priciest Session",
       "gridPos": {
         "h": 4,
-        "w": 4,
-        "x": 20,
+        "w": 3,
+        "x": 21,
         "y": 1
       },
       "targets": [
@@ -599,7 +644,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "label_replace(sum by (model) (increase(claude_code_token_usage_tokens_total{session_id=~\"$session.*\"}[$__range])), \"model\", \"$1\", \"model\", \"^([^[]+).*$\")",
+          "expr": "sum by (model) (label_replace(label_replace(label_replace(increase(claude_code_token_usage_tokens_total{type!=\"cacheRead\",session_id=~\"$session.*\"}[$__range]),\"model\",\"$1\",\"model\",\"^(.*)-[0-9]{8}$\"),\"model\",\"$1\",\"model\",\"^([^[]+)[[].*$\"),\"model\",\"$1\",\"model\",\"^~(.*)$\"))",
           "refId": "A",
           "instant": true,
           "range": false,
@@ -610,7 +655,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "label_replace(sum by (model) (increase(claude_code_cost_usage_USD_total{session_id=~\"$session.*\"}[$__range])), \"model\", \"$1\", \"model\", \"^([^[]+).*$\")",
+          "expr": "sum by (model) (label_replace(label_replace(label_replace(increase(claude_code_cost_usage_USD_total{session_id=~\"$session.*\"}[$__range]),\"model\",\"$1\",\"model\",\"^(.*)-[0-9]{8}$\"),\"model\",\"$1\",\"model\",\"^([^[]+)[[].*$\"),\"model\",\"$1\",\"model\",\"^~(.*)$\"))",
           "refId": "B",
           "instant": true,
           "range": false,
@@ -621,7 +666,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "label_replace(sum by (model) (increase(claude_code_cost_usage_USD_total{session_id=~\"$session.*\"}[$__range])) / (sum by (model) (increase(claude_code_token_usage_tokens_total{session_id=~\"$session.*\"}[$__range])) / 1000), \"model\", \"$1\", \"model\", \"^([^[]+).*$\")",
+          "expr": "sum by (model) (label_replace(label_replace(label_replace(increase(claude_code_cost_usage_USD_total{session_id=~\"$session.*\"}[$__range]),\"model\",\"$1\",\"model\",\"^(.*)-[0-9]{8}$\"),\"model\",\"$1\",\"model\",\"^([^[]+)[[].*$\"),\"model\",\"$1\",\"model\",\"^~(.*)$\")) / (sum by (model) (label_replace(label_replace(label_replace(increase(claude_code_token_usage_tokens_total{type!=\"cacheRead\",session_id=~\"$session.*\"}[$__range]),\"model\",\"$1\",\"model\",\"^(.*)-[0-9]{8}$\"),\"model\",\"$1\",\"model\",\"^([^[]+)[[].*$\"),\"model\",\"$1\",\"model\",\"^~(.*)$\")) / 1000)",
           "refId": "C",
           "instant": true,
           "range": false,
@@ -632,7 +677,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "label_replace(sum by (model) (increase(claude_code_token_usage_tokens_total{type=\"cacheRead\",session_id=~\"$session.*\"}[$__range])) / sum by (model) (increase(claude_code_token_usage_tokens_total{session_id=~\"$session.*\"}[$__range])), \"model\", \"$1\", \"model\", \"^([^[]+).*$\")",
+          "expr": "sum by (model) (label_replace(label_replace(label_replace(increase(claude_code_token_usage_tokens_total{type=\"cacheRead\",session_id=~\"$session.*\"}[$__range]),\"model\",\"$1\",\"model\",\"^(.*)-[0-9]{8}$\"),\"model\",\"$1\",\"model\",\"^([^[]+)[[].*$\"),\"model\",\"$1\",\"model\",\"^~(.*)$\")) / sum by (model) (label_replace(label_replace(label_replace(increase(claude_code_token_usage_tokens_total{session_id=~\"$session.*\"}[$__range]),\"model\",\"$1\",\"model\",\"^(.*)-[0-9]{8}$\"),\"model\",\"$1\",\"model\",\"^([^[]+)[[].*$\"),\"model\",\"$1\",\"model\",\"^~(.*)$\"))",
           "refId": "D",
           "instant": true,
           "range": false,
@@ -643,7 +688,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "avg by (model) (avg_over_time({service_name=~\".+\"} | event_name=\"api_request\" | session_id=~\"$session.*\" | unwrap duration_ms [$__range]))",
+          "expr": "avg by (model) (avg_over_time({service_name=~\".+\"} | event_name=\"api_request\" | session_id=~\"$session.*\" | label_format model=`{{ regexReplaceAll \"-[0-9]{8}$\" (regexReplaceAll \"[[].*$\" (regexReplaceAll \"^~\" .model \"\") \"\") \"\" }}` | unwrap duration_ms [$__range]))",
           "refId": "E",
           "queryType": "instant",
           "instant": true
@@ -653,7 +698,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "(sum by (model) (count_over_time({service_name=~\".+\"} | event_name=\"api_error\" | session_id=~\"$session.*\" [$__range])) or (sum by (model) (count_over_time({service_name=~\".+\"} | event_name=~\"api_request|api_error\" | session_id=~\"$session.*\" [$__range])) * 0)) / sum by (model) (count_over_time({service_name=~\".+\"} | event_name=~\"api_request|api_error\" | session_id=~\"$session.*\" [$__range]))",
+          "expr": "(sum by (model) (count_over_time({service_name=~\".+\"} | event_name=\"api_error\" | session_id=~\"$session.*\" | label_format model=`{{ regexReplaceAll \"-[0-9]{8}$\" (regexReplaceAll \"[[].*$\" (regexReplaceAll \"^~\" .model \"\") \"\") \"\" }}` [$__range])) or (sum by (model) (count_over_time({service_name=~\".+\"} | event_name=~\"api_request|api_error\" | session_id=~\"$session.*\" | label_format model=`{{ regexReplaceAll \"-[0-9]{8}$\" (regexReplaceAll \"[[].*$\" (regexReplaceAll \"^~\" .model \"\") \"\") \"\" }}` [$__range])) * 0)) / sum by (model) (count_over_time({service_name=~\".+\"} | event_name=~\"api_request|api_error\" | session_id=~\"$session.*\" | label_format model=`{{ regexReplaceAll \"-[0-9]{8}$\" (regexReplaceAll \"[[].*$\" (regexReplaceAll \"^~\" .model \"\") \"\") \"\" }}` [$__range]))",
           "refId": "F",
           "queryType": "instant",
           "instant": true
@@ -663,7 +708,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "label_replace(round(sum by (model) (increase(claude_code_lines_of_code_count_total{type=\"added\",session_id=~\"$session.*\"}[$__range]))), \"model\", \"$1\", \"model\", \"^([^[]+).*$\")",
+          "expr": "round(sum by (model) (label_replace(label_replace(label_replace(increase(claude_code_lines_of_code_count_total{type=\"added\",session_id=~\"$session.*\"}[$__range]),\"model\",\"$1\",\"model\",\"^(.*)-[0-9]{8}$\"),\"model\",\"$1\",\"model\",\"^([^[]+)[[].*$\"),\"model\",\"$1\",\"model\",\"^~(.*)$\")))",
           "refId": "G",
           "instant": true,
           "range": false,
@@ -674,7 +719,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "quantile_over_time(0.5, {service_name=~\".+\"} | event_name=\"api_request\" | session_id=~\"$session.*\" | unwrap duration_ms [$__range]) by (model)",
+          "expr": "quantile_over_time(0.5, {service_name=~\".+\"} | event_name=\"api_request\" | session_id=~\"$session.*\" | label_format model=`{{ regexReplaceAll \"-[0-9]{8}$\" (regexReplaceAll \"[[].*$\" (regexReplaceAll \"^~\" .model \"\") \"\") \"\" }}` | unwrap duration_ms [$__range]) by (model)",
           "refId": "H",
           "queryType": "instant",
           "instant": true
@@ -684,7 +729,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "quantile_over_time(0.95, {service_name=~\".+\"} | event_name=\"api_request\" | session_id=~\"$session.*\" | unwrap duration_ms [$__range]) by (model)",
+          "expr": "quantile_over_time(0.95, {service_name=~\".+\"} | event_name=\"api_request\" | session_id=~\"$session.*\" | label_format model=`{{ regexReplaceAll \"-[0-9]{8}$\" (regexReplaceAll \"[[].*$\" (regexReplaceAll \"^~\" .model \"\") \"\") \"\" }}` | unwrap duration_ms [$__range]) by (model)",
           "refId": "I",
           "queryType": "instant",
           "instant": true
@@ -860,7 +905,7 @@
       "options": {
         "showHeader": true
       },
-      "description": "One row per model - everything you'd otherwise need five separate gauges to compare. Cache hit % and Error % are genuinely status metrics (good/bad), so they alone get the green/red treatment; the rest is plain magnitude. FIXED: Error % used to silently disappear from this table whenever a model had zero api_error events, because dividing by an empty vector in PromQL/LogQL yields no series at all - the numerator now falls back to an explicit 0 per model so the division always has something to divide. Added p50/p95 latency alongside the average, since a mean alone hides tail latency.",
+      "description": "One row per model. Tokens and $/1K tok use the Fresh-token basis (input+output+cacheCreation, excluding cacheRead) so $/1K reflects real rates instead of being diluted ~1000x by cache replays; Cache hit % keeps cacheRead over all tokens. FIXED: the model join-key is now normalized identically on Prometheus (label_replace) and Loki (label_format) - stripping -YYYYMMDD date suffixes, [..] context tags, and a stray ~ - so api_error (undated names) and api_request (dated names) share a key. Before, non-Claude models split into half-populated rows and Error % read 100% on error-only rows / 0% on request-only rows. Cache hit % and Error % get the green/red treatment; the rest is plain magnitude. p50/p95 sit beside the average to expose tail latency.",
       "transformations": [
         {
           "id": "joinByField",
@@ -2065,7 +2110,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "topk(15, sum by (session_id, terminal_type) (increase(claude_code_token_usage_tokens_total{model=~\"$model\"}[$__range])))",
+          "expr": "topk(15, sum by (session_id, terminal_type) (increase(claude_code_token_usage_tokens_total{type!=\"cacheRead\",model=~\"$model\"}[$__range])))",
           "refId": "A",
           "instant": true,
           "range": false,
@@ -2211,7 +2256,7 @@
           }
         }
       ],
-      "description": "Deliberately NOT filtered by $session - this is the picker. One-hue magnitude ramp on the Tokens column (this is ranking, not status) - a handful of huge sessions dominating means restart/compact discipline is the fix. Cost and Active Time are joined in so you can tell a token-heavy-but-fast session (efficient) from a token-heavy-and-slow one (the actual long-session anti-pattern this row is named for)."
+      "description": "Deliberately NOT filtered by $session - this is the picker. One-hue magnitude ramp on the Tokens column (this is ranking, not status) - a handful of huge sessions dominating means restart/compact discipline is the fix. The Tokens column uses the Fresh-token basis (excludes cacheRead) to match the Fresh Tokens tile up top, so the ranking is not dominated by cache replays. Cost and Active Time are joined in so you can tell a token-heavy-but-fast session (efficient) from a token-heavy-and-slow one (the actual long-session anti-pattern this row is named for)."
     },
     {
       "id": 13,
@@ -2439,7 +2484,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "round(sum(increase(claude_code_commit_count_total{session_id=~\"$session.*\"}[$__range])))",
+          "expr": "sum(max_over_time(claude_code_commit_count_total{session_id=~\"$session.*\"}[$__range]))",
           "legendFormat": "Commits",
           "instant": true
         },
@@ -2449,7 +2494,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "round(sum(increase(claude_code_pull_request_count_total{session_id=~\"$session.*\"}[$__range])))",
+          "expr": "sum(max_over_time(claude_code_pull_request_count_total{session_id=~\"$session.*\"}[$__range]))",
           "legendFormat": "Pull Requests",
           "instant": true
         }
@@ -2475,7 +2520,7 @@
         "colorMode": "none",
         "graphMode": "none"
       },
-      "description": "MERGED from the separate Commits Created + Pull Requests Created stats. round() wraps increase() because these are counts of discrete, sparse events - raw increase() extrapolates fractional values (e.g. 2.6 commits).",
+      "description": "MERGED from the separate Commits Created + Pull Requests Created stats. Uses max_over_time, NOT increase(): these are ultra-sparse counters - a session emits a single flat sample (commit=1, sometimes 2) - so increase(), which needs >=2 in-window samples and sums inter-sample deltas, silently undercounts or shows nothing. max_over_time reads each session's peak count and sums across sessions, so single-commit sessions count.",
       "gridPos": {
         "h": 7,
         "w": 8,

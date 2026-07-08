@@ -1,4 +1,4 @@
-.PHONY: help setup up down restart logs ps clean start
+.PHONY: help setup up down restart logs ps clean start update
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -18,6 +18,13 @@ down: ## Stop the stack (keeps data)
 
 restart: ## Recreate the stack (picks up dashboard/compose edits)
 	docker compose up -d --force-recreate
+
+update: ## Update to latest: git pull, pull pinned images, recreate (keeps your stored telemetry)
+	git pull --ff-only
+	docker compose pull
+	docker compose up -d --force-recreate
+	@echo ""
+	@echo "  Updated. Dashboard/config changes are live at http://localhost:3000"
 
 logs: ## Tail stack logs
 	docker compose logs -f
