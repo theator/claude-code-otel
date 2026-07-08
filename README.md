@@ -41,7 +41,7 @@ exactly happened", across seven sections:
 
 | Section | Answers |
 |---|---|
-| **Overview** | Total cost, total tokens, cache-hit %, sessions in range, active time, priciest session — for the selected time window. |
+| **Overview** | Total cost, fresh tokens (input + output + cacheCreation), cache reads, cache-hit %, sessions in range, active time, priciest session — for the selected time window. |
 | **Cost & Token Flow** | Token volume over time by type (input/output/cacheRead/cacheCreation) and by model. |
 | **By Model** | One-row-per-model comparison: tokens, cost, $/1K tokens, cache hit %, p50/p95/avg latency, error %, lines added. Plus MCP-tool token attribution. |
 | **Tool Usage** | Per-tool summary (calls, avg duration, output bytes, error %), the slowest individual tool calls, and a readable Bash command log. |
@@ -157,11 +157,38 @@ make setup      # configure Claude Code telemetry (merges into ~/.claude/setting
 make up         # start the stack
 make down       # stop (keeps stored telemetry)
 make restart    # recreate (picks up dashboard/compose edits)
+make update     # git pull + pull pinned images + recreate (keeps stored telemetry)
 make logs       # tail logs
 make ps         # status
 make clean      # stop and DELETE all stored telemetry (removes volumes)
 make start      # setup + up
 ```
+
+## Updating
+
+To pull the latest version of this stack (new dashboard panels, config fixes, bumped image
+pins):
+
+```bash
+make update
+```
+
+That runs `git pull --ff-only`, then `docker compose pull` and recreates the containers. Your
+stored telemetry lives in named Docker volumes (`lgtm-data`, `phoenix-data`) and is **kept**
+across updates — only `make clean` deletes it.
+
+A few things worth knowing:
+
+- **The dashboard JSON hot-reloads.** It's bind-mounted into Grafana, which re-reads it every
+  10s, so edits (or a `git pull` that only touched `claude-code.json`) show up **without**
+  recreating anything. `make update` still recreates so that `otelcol-config.yaml`,
+  `docker-compose.yml`, and image-tag changes are picked up too.
+- **Images are pinned** in `docker-compose.yml` for reproducible sharing. `docker compose pull`
+  only fetches something new when a `git pull` has actually bumped a tag; bump them
+  deliberately and re-test.
+- **No need to re-run `make setup`** unless the telemetry env block in
+  `settings.claude.example.json` changed — `make update` leaves your `~/.claude/settings.json`
+  untouched. If it did change, re-run `make setup` and restart your Claude Code sessions.
 
 ## Editing the dashboard
 
