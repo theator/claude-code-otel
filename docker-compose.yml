@@ -7,7 +7,7 @@ services:
     container_name: claude-code-lgtm
     restart: unless-stopped
     ports:
-      - "3000:3000"   # Grafana UI
+      - "3300:3000"   # Grafana UI
       - "4317:4317"   # OTLP gRPC   (Claude Code -> collector)
       - "4318:4318"   # OTLP HTTP   (Claude Code -> collector)
       - "9090:9090"   # Prometheus API (debugging)
