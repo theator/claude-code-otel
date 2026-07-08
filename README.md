@@ -188,7 +188,6 @@ claude-code-otel/
 ├── setup.sh                        # merges that block into ~/.claude/settings.json (safe, backs up)
 ├── Makefile                        # make up / down / setup / start / ...
 ├── screenshots/                    # dashboard images used in this README
-├── proxy.py, dashboard.html, ui/   # optional standalone browser dashboards (not required)
 └── LICENSE
 ```
 

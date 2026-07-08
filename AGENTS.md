@@ -2,73 +2,52 @@
 
 ## What this project is
 
-A local observability stack for Claude Code's OpenTelemetry export. It receives OTLP metrics/traces/logs from Claude Code, stores them in LGTM (Grafana, Loki, Tempo, Prometheus) plus Arize Phoenix, and provides dashboards to explore cost, tokens, sessions, tools, and trace waterfalls.
+A local observability stack for Claude Code's OpenTelemetry export. It receives OTLP metrics/traces/logs from Claude Code, stores them in Grafana LGTM (Loki, Tempo, Prometheus) plus Arize Phoenix, and ships a pre-provisioned Grafana dashboard to explore cost, tokens, sessions, tools, and trace waterfalls.
 
 ## Architecture
 
-- `docker-compose.yml` — `grafana/otel-lgtm:latest` (LGTM) + `arizephoenix/phoenix:latest`
-- `otelcol-config.yaml` — OpenTelemetry Collector config: delta metrics → cumulative, token attribute remapping to OpenInference, routing traces to Tempo + Phoenix, metrics to Prometheus, logs to Loki
-- `proxy.py` — lightweight Python CORS proxy on `:8090`; bridges browser requests to Loki (`/loki/*`), Tempo (`/tempo/*`), and Phoenix (`/phoenix/*`)
-- `dashboard.html` — standalone vanilla-JS dashboard (ECharts) that reads from the proxy
-- `ui/` — newer React + TypeScript + Vite dashboard with Overview, Sessions, and Session Detail views
-- `grafana-dashboards/` — Grafana dashboard JSON + provisioning config loaded into LGTM
+- `docker-compose.yml` — `grafana/otel-lgtm` (LGTM all-in-one) + `arizephoenix/phoenix` (LLM-native trace inspection). Images are pinned.
+- `otelcol-config.yaml` — OpenTelemetry Collector config: converts Claude Code's delta metric counters to cumulative (Prometheus rejects delta sums), remaps flat token attributes onto the OpenInference `llm.token_count.*` names Phoenix expects, and fans traces out to Tempo + Phoenix.
+- `grafana-dashboards/claude-code.json` — the dashboard, source of truth. Hot-reloads (Grafana re-reads every 10s).
+- `grafana-dashboards/provisioning.yaml` — tells Grafana to load the dashboard.
+- `settings.claude.example.json` — the telemetry `env` block to add to Claude Code.
+- `setup.sh` — merges that block into `~/.claude/settings.json` (backs up first, never clobbers existing keys).
+- `Makefile` — `make setup / up / down / restart / start / clean / ...`.
 
 ## Ports
 
 | Port | Service                                  |
 | ---- | ---------------------------------------- |
-| 3000 | Grafana UI                               |
-| 4317 | OTLP gRPC                                |
-| 4318 | OTLP HTTP                                |
-| 9090 | Prometheus API                           |
-| 3100 | Loki API                                 |
-| 3200 | Tempo API                                |
+| 3000 | Grafana UI (dashboard)                   |
+| 4317 | OTLP gRPC   (Claude Code → collector)    |
+| 4318 | OTLP HTTP   (Claude Code → collector)    |
+| 9090 | Prometheus API (debugging)               |
+| 3100 | Loki API (debugging)                     |
+| 3200 | Tempo API (debugging)                    |
 | 6006 | Phoenix UI + OTLP HTTP trace ingestion   |
-| 8090 | Local CORS proxy                         |
 
 ## How to run
 
-1. Start the backends:
+```bash
+make start        # configure Claude Code telemetry + start the stack
+open http://localhost:3000
+```
 
-   ```bash
-   docker compose up -d
-   ```
+`make start` runs `make setup` (telemetry env) then `make up` (containers). Restart any open Claude Code sessions so they pick up the new settings.
 
-2. Start the CORS proxy and open the legacy dashboard:
+## Editing the dashboard
 
-   ```bash
-   ./start.sh
-   ```
+The dashboard is provisioned from `grafana-dashboards/claude-code.json` and hot-reloads. Edit the JSON directly — it is the source of truth. Grafana's "Save dashboard" button won't persist to the file (provisioned dashboards are read-only from the UI). If a bind-mount cache goes stale and edits don't appear, `make restart`.
 
-3. To run the React UI in dev mode:
-
-   ```bash
-   cd ui
-   npm install
-   npm run dev
-   ```
-
-4. To build the React UI:
-
-   ```bash
-   cd ui
-   npm install
-   npm run build  # output to ui/dist/
-   ```
-
-## UI code conventions
-
-- React 19, TanStack Router + Query, ECharts via `echarts-for-react`, Tailwind 4
-- Keep styling consistent with CSS variables `--color-bg`, `--color-card`, `--color-border`, `--color-text`, `--color-muted`, `--color-accent`, `--color-green`, `--color-yellow`, `--color-red`
-- Put shared components in `ui/src/components/`, shared utilities in `ui/src/lib/`, and page-level views in `ui/src/views/`
-- Keep PromQL queries in `ui/src/lib/api.ts`, `ui/src/lib/chart-queries.ts`, or the relevant view file; avoid hard-coding queries in components
-- `ui/src/lib/time.ts` is the global time-range store; views consume it via `useTimeRange()`
+Query fundamentals:
+- Metrics (cost/tokens/counters) → Prometheus (`claude_code_*` metrics).
+- Structured log events (prompts, tool results, API errors, compaction) → Loki, filtered by `event_name=...`.
+- Spans (interaction / llm_request / tool) → Tempo via TraceQL. Use `tableType=spans` to flatten a `select(span.attr)` into a real table column instead of a nested sub-frame. Requires `CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1`.
 
 ## Tests / lint
 
-- UI lint: `cd ui && npm run lint` (uses Oxlint)
-- There are currently no automated tests
+There are no automated tests. Validate the dashboard JSON with `python3 -m json.tool grafana-dashboards/claude-code.json` before committing.
 
 ## Claude Code OpenTelemetry setup
 
-For telemetry to flow in, Claude Code must be configured to export OTLP to `http://localhost:4318` (or `http://localhost:4317` for gRPC). The collector transforms and forwards the data.
+For telemetry to flow in, Claude Code must export OTLP to `http://localhost:4318` (HTTP) or `:4317` (gRPC). See `settings.claude.example.json` for the exact env block; `make setup` applies it. `OTEL_LOG_USER_PROMPTS=1` and `OTEL_LOG_TOOL_DETAILS=1` populate the prompt-text and shell-command columns — everything stays local.
