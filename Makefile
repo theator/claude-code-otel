@@ -10,7 +10,7 @@ setup: ## Configure Claude Code to export telemetry (merges into ~/.claude/setti
 up: ## Start the observability stack
 	docker compose up -d
 	@echo ""
-	@echo "  Grafana (dashboard): http://localhost:3200"
+	@echo "  Grafana (dashboard): http://localhost:3300"
 	@echo "  Phoenix (LLM traces): http://localhost:6006"
 
 down: ## Stop the stack (keeps data)
@@ -24,7 +24,7 @@ update: ## Update to latest: git pull, pull pinned images, recreate (keeps your 
 	docker compose pull
 	docker compose up -d --force-recreate
 	@echo ""
-	@echo "  Updated. Dashboard/config changes are live at http://localhost:3200"
+	@echo "  Updated. Dashboard/config changes are live at http://localhost:3300"
 
 logs: ## Tail stack logs
 	docker compose logs -f
@@ -37,4 +37,4 @@ clean: ## Stop and DELETE all stored telemetry (removes volumes)
 
 start: setup up ## One-shot: configure telemetry + start the stack
 	@echo ""
-	@echo "All set. Run Claude Code in any project, then open http://localhost:3200"
+	@echo "All set. Run Claude Code in any project, then open http://localhost:3300"
