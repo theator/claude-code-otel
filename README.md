@@ -21,7 +21,7 @@ cd claude-code-otel
 make start        # configures Claude Code telemetry + starts the stack
 ```
 
-Then run Claude Code in any project as usual, and open **http://localhost:3000** — the
+Then run Claude Code in any project as usual, and open **http://localhost:3200** — the
 Claude Code dashboard is the landing page (no login).
 
 `make start` does two things:
@@ -72,7 +72,7 @@ Two dashboard variables at the top — **model** and **session** — filter the 
   Claude Code  ───▶ │  grafana/otel-lgtm  (:4317 gRPC / :4318 HTTP) │
   (OTLP export)     │                                              │
                     │   metrics ─▶ Prometheus  ┐                   │
-                    │   logs    ─▶ Loki         ├─▶ Grafana (:3000) │
+                    │   logs    ─▶ Loki         ├─▶ Grafana (:3200) │
                     │   traces  ─▶ Tempo       ┘                   │
                     └───────────────────┬──────────────────────────┘
                                         └─ traces also ─▶ Arize Phoenix (:6006)
@@ -141,7 +141,7 @@ text columns.
 
 | Port | Service |
 |---|---|
-| 3000 | Grafana UI (dashboard) |
+| 3200 | Grafana UI (dashboard) |
 | 6006 | Arize Phoenix UI + OTLP trace ingest |
 | 4317 / 4318 | OTLP gRPC / HTTP (Claude Code → collector) |
 | 9090 | Prometheus API (debugging) |
@@ -226,7 +226,7 @@ claude-code-otel/
 - **Traces section empty.** You need `CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1` *and* a restarted
   Claude Code session.
 - **Edited the JSON but nothing changed.** `make restart` (Docker Desktop bind-mount caching).
-- **Port already in use.** Something else owns 3000/4318/etc. Stop it or remap the port in
+- **Port already in use.** Something else owns 3200/4318/etc. Stop it or remap the port in
   `docker-compose.yml`.
 
 ## Credits
