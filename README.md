@@ -4,7 +4,8 @@ A one-command, fully local observability stack for [Claude Code](https://claude.
 built-in OpenTelemetry export. Point Claude Code at `localhost:4318` and get a rich,
 pre-provisioned Grafana dashboard of your **cost, tokens, cache efficiency, tool usage,
 per-turn latency, and the actual prompts + shell commands behind your slowest turns** —
-plus full trace waterfalls in Grafana Tempo and Arize Phoenix.
+plus **ten pre-provisioned alert rules** (spend limits, secret-leak detection, runaway
+loops — see [Alerts](#alerts)) and full trace waterfalls in Grafana Tempo and Arize Phoenix.
 
 Everything runs on your machine. No data leaves your laptop.
 
@@ -37,11 +38,12 @@ Claude Code dashboard is the landing page (no login).
 ## What you get
 
 A single dashboard, organized top-to-bottom from "how much / how healthy" down to "what
-exactly happened", across seven sections:
+exactly happened":
 
 | Section | Answers |
 |---|---|
 | **Overview** | Total cost, fresh tokens (input + output + cacheCreation), cache reads, cache-hit %, sessions in range, active time, priciest session — for the selected time window. |
+| **Alert Status** | Live state of the ten provisioned alert rules — spend limits, token burn, secret-leak detection, cache collapse, runaway loops, and more. Firing sorts to the top. See [Alerts](#alerts) for the rules, thresholds, and optional Slack notifications. |
 | **Cost & Token Flow** | Token volume over time by type (input/output/cacheRead/cacheCreation) and by model. |
 | **By Model** | One-row-per-model comparison: tokens, cost, $/1K tokens, cache hit %, p50/p95/avg latency, error %, lines added. Plus MCP-tool token attribution. |
 | **Tool Usage** | Per-tool summary (calls, avg duration, output bytes, error %), the slowest individual tool calls, and a readable Bash command log. |
@@ -216,7 +218,7 @@ is emailed, Slacked, or sent anywhere unless you opt in below.
 |---|---|---|---|
 | Daily spend limit | `sum(increase(cost_usage_USD_total[24h]))` | $250 / 24h | critical |
 | Hourly token burn | `sum(increase(token_usage_tokens_total{type=~"input\|output"}[1h]))` | 5,000,000 fresh tokens / h | warning |
-| Watched-model spend | `sum(increase(cost_usage_USD_total{model=~"claude-fable.*"}[6h]))` | $50 / 6h | warning |
+| Watched-model spend | `sum by (model) (increase(cost_usage_USD_total{model=~"claude-fable.*"}[5h]))` | $100 / 5h (one Claude subscription window) | warning |
 | Unexpected model in use | `sum by (model) (increase(cost_usage_USD_total{model!~"claude-.*"}[1h]))` | any spend | warning |
 | Sensitive data in telemetry | Loki scan of `user_prompt`/`tool_result` bodies for secret-shaped strings (AWS/Anthropic/OpenAI/GitHub/Slack/GCP keys, private keys, JWTs) over 10m | any match | critical |
 | Cache hit-rate collapse | cacheRead ÷ total fresh+cached tokens, over 15m, guarded against low-volume noise | < 50% (on 100,000+ tokens/15m) | critical |
