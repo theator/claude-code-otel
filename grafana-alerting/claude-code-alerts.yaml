@@ -75,10 +75,10 @@ groups:
         data:
           - refId: A
             datasourceUid: prometheus
-            relativeTimeRange: { from: 21600, to: 0 }
+            relativeTimeRange: { from: 18000, to: 0 }
             model:
               refId: A
-              expr: sum(increase(claude_code_cost_usage_USD_total{model=~"claude-fable.*"}[6h])) # tune me: watchlist regex, e.g. "claude-fable.*|claude-opus.*"
+              expr: sum by (model) (increase(claude_code_cost_usage_USD_total{model=~"claude-fable.*"}[5h])) # tune me: watchlist regex, e.g. "claude-fable.*|claude-opus.*"
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
@@ -89,15 +89,15 @@ groups:
               type: threshold
               expression: A
               conditions:
-                - evaluator: { type: gt, params: [50] } # tune me: USD per rolling 6h for the watched model(s)
+                - evaluator: { type: gt, params: [100] } # tune me: USD per rolling 5h (matches the Claude subscription window)
         for: 0s
         noDataState: OK
         execErrState: OK
         labels:
           severity: warning
         annotations:
-          summary: Spend on a watched model has exceeded $50 over the last 6h.
-          description: 'Watched-model spend over 6h: ${{ printf "%.2f" $values.A.Value }} (limit $50).'
+          summary: Spend on a watched model has exceeded $100 over the last 5h (one subscription window).
+          description: 'Watched model `{{ $labels.model }}` spent ${{ printf "%.2f" $values.A.Value }} over the last 5h (limit $100 per subscription window).'
 
       - uid: cc-unexpected-model
         title: Unexpected model in use

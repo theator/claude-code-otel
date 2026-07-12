@@ -396,9 +396,10 @@
           "noData": false,
           "normal": true,
           "error": true
-        }
+        },
+        "showInstances": false
       },
-      "description": "Live state of the Grafana-managed alert rules provisioned from grafana-alerting/claude-code-alerts.yaml. Firing/pending sort to the top; thresholds are tunable in that file (see the Alerts section of the README)."
+      "description": "Live state of the Grafana-managed alert rules provisioned from grafana-alerting/claude-code-alerts.yaml. Firing/pending sort to the top; thresholds are tunable in that file (see the Alerts section of the README). Click an instance row for its full alert text and evaluated value."
     },
     {
       "id": 102,
