@@ -157,6 +157,9 @@ make setup      # configure Claude Code telemetry (merges into ~/.claude/setting
 make up         # start the stack
 make down       # stop (keeps stored telemetry)
 make restart    # recreate (picks up dashboard/compose edits)
+make reload-alerts # reload alert rules after editing grafana-alerting/*.yaml (restarts Grafana only)
+make setup-slack # enable Slack alert notifications (prompts for a webhook URL, stays local)
+make remove-slack # disable Slack alert notifications (reverts to UI-only)
 make update     # git pull + pull pinned images + recreate (keeps stored telemetry)
 make logs       # tail logs
 make ps         # status
@@ -202,6 +205,78 @@ If Docker's bind-mount cache goes stale and edits don't show, `make restart`.
 
 ---
 
+## Alerts
+
+Ten alert rules ship by default, provisioned from `grafana-alerting/claude-code-alerts.yaml`
+into a **Claude Code** folder on Grafana's Alerting page. No contact point is configured —
+firing alerts show up in the UI (Alerting page + the bell icon in the top nav) only. Nothing
+is emailed, Slacked, or sent anywhere unless you opt in below.
+
+| Rule | Condition | Default threshold | Severity |
+|---|---|---|---|
+| Daily spend limit | `sum(increase(cost_usage_USD_total[24h]))` | $250 / 24h | critical |
+| Hourly token burn | `sum(increase(token_usage_tokens_total{type=~"input\|output"}[1h]))` | 5,000,000 fresh tokens / h | warning |
+| Watched-model spend | `sum(increase(cost_usage_USD_total{model=~"claude-fable.*"}[6h]))` | $50 / 6h | warning |
+| Unexpected model in use | `sum by (model) (increase(cost_usage_USD_total{model!~"claude-.*"}[1h]))` | any spend | warning |
+| Sensitive data in telemetry | Loki scan of `user_prompt`/`tool_result` bodies for secret-shaped strings (AWS/Anthropic/OpenAI/GitHub/Slack/GCP keys, private keys, JWTs) over 10m | any match | critical |
+| Cache hit-rate collapse | cacheRead ÷ total fresh+cached tokens, over 15m, guarded against low-volume noise | < 50% (on 100,000+ tokens/15m) | critical |
+| API error burst | `sum(count_over_time(... event_name=~"api_error\|api_retries_exhausted" [5m]))` | > 5 / 5m | warning |
+| Spend pace would blow daily budget | last-3h spend pace extrapolated to 24h (`increase(...[3h]) * 8`) | > $900 (set well above your working-hours pace — bursts project 3-4x the real daily total) | warning |
+| Runaway agent/tool loop | max per-session `tool_result` count over 10m | > 150 | critical |
+| Context auto-compaction | per-session count of `compaction` events with `trigger="auto"`, over 15m | any | info |
+
+The sensitive-data rule is defensive: with `OTEL_LOG_USER_PROMPTS`/`OTEL_LOG_TOOL_DETAILS` on, a
+pasted secret can end up in local telemetry. Detection runs entirely against your own Loki —
+nothing is scanned or sent off-machine. It fires per session (`session_id` label) and its
+`explore_logs` annotation deep-links straight into Grafana Explore, pre-filtered to the
+offending session's last hour, so you can find the exact line without hand-writing a query.
+Severities follow impact: `critical` for spend/security/runaway-loop rules where a cache miss
+alone costs 12.5-20x a hit, `warning` for the rest, and `info` for auto-compaction — a normal
+part of long sessions, surfaced mainly so you know a fresh session might now read better.
+
+**Tuning thresholds.** Each threshold and watchlist/allowlist regex is on its own line marked
+`# tune me` in `grafana-alerting/claude-code-alerts.yaml`. Edit the value, then:
+
+```bash
+make reload-alerts   # or: make restart
+```
+
+Alerting provisioning files are only read at Grafana startup — unlike the dashboard JSON,
+they do **not** hot-reload, so an edit needs one of the two commands above to take effect.
+
+**Slack (opt-in).** By default alerts are UI-only. To also post to Slack:
+
+```bash
+make setup-slack   # prompts for your webhook URL, applies it live
+```
+
+This writes `grafana-alerting/notifications.yaml` from the `.example` template (gitignored —
+your webhook URL never leaves your machine via git) and reloads Grafana. To turn it back off:
+
+```bash
+make remove-slack
+```
+
+`make remove-slack` explicitly retracts the Slack contact point, the notification template, and
+resets the policy tree, then removes the file — just deleting `notifications.yaml` yourself
+wouldn't be enough, since Grafana's provisioning only adds/updates from files, it doesn't prune
+what a removed file used to declare.
+
+Messages are formatted via a Grafana notification template (also in `notifications.yaml.example`):
+a severity emoji (🚨/⚠️/ℹ️) when firing or ✅ when resolved, the rule name as a link back to
+Grafana, a one-line description with the actual value, and a 🔍 log deep-link on the
+sensitive-data alert — not the raw default payload.
+
+> Enabling this provisions a `policies:` tree, which replaces Grafana's entire notification
+> policy tree and makes it read-only in the UI — and sends alert data (rule names, values) to
+> Slack, i.e. off this machine.
+
+**Known gaps, honestly.** There's no per-model *time* alert — Claude Code doesn't export a
+per-model duration metric, only cost and tokens. And Pro/Max subscription-limit percentage
+isn't exported at all, so there's no way to alert on "80% of my plan's quota."
+
+---
+
 ## Repo layout
 
 ```
@@ -211,6 +286,9 @@ claude-code-otel/
 ├── grafana-dashboards/
 │   ├── claude-code.json            # the dashboard (source of truth)
 │   └── provisioning.yaml           # tells Grafana to load it
+├── grafana-alerting/
+│   ├── claude-code-alerts.yaml      # the default alert rules (source of truth)
+│   └── notifications.yaml.example  # opt-in Slack contact point + policy (`make setup-slack` writes notifications.yaml here)
 ├── settings.claude.example.json    # the telemetry env block to add to Claude Code
 ├── setup.sh                        # merges that block into ~/.claude/settings.json (safe, backs up)
 ├── Makefile                        # make up / down / setup / start / ...
@@ -226,6 +304,8 @@ claude-code-otel/
 - **Traces section empty.** You need `CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1` *and* a restarted
   Claude Code session.
 - **Edited the JSON but nothing changed.** `make restart` (Docker Desktop bind-mount caching).
+- **Edited alert thresholds but nothing changed.** `make reload-alerts` — alerting provisioning
+  files don't hot-reload like the dashboard.
 - **Port already in use.** Something else owns 3300/4318/etc. Stop it or remap the port in
   `docker-compose.yml`.
 

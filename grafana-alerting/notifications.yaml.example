@@ -1,0 +1,38 @@
+# Opt-in Slack notifications for the Claude Code alert rules.
+# To enable: `make setup-slack` (prompts for your webhook URL, writes notifications.yaml).
+# To disable: `make remove-slack`.
+# WARNING: the policies: tree below REPLACES Grafana's entire notification
+# policy tree and makes it read-only in the UI — that's why this stays opt-in.
+# WARNING: enabling this sends alert data (rule names, values) to Slack, i.e. off this machine.
+apiVersion: 1
+templates:
+  - orgId: 1
+    name: claude-code-slack
+    template: |
+      {{ define "claude_code.title" -}}
+      {{ $s := (index .Alerts 0).Labels.severity -}}
+      {{ if eq .Status "resolved" }}✅{{ else if eq $s "critical" }}🚨{{ else if eq $s "info" }}ℹ️{{ else }}⚠️{{ end }} {{ .CommonLabels.alertname }}{{ if gt (len .Alerts) 1 }} (x{{ len .Alerts }}){{ end }}
+      {{- end }}
+
+      {{ define "claude_code.text" -}}
+      {{ range .Alerts -}}
+      {{ if and (eq .Status "resolved") (ne $.Status "resolved") }}✅ {{ end }}{{ if .Annotations.description }}{{ .Annotations.description }}{{ else }}{{ .Annotations.summary }}{{ end }}{{ if .Annotations.explore_logs }} · <{{ .Annotations.explore_logs }}|🔍 View logs>{{ end }}
+      {{ end -}}
+      {{- end }}
+contactPoints:
+  - orgId: 1
+    name: cc-slack
+    receivers:
+      - uid: cc-slack
+        type: slack
+        settings:
+          url: <YOUR_SLACK_WEBHOOK_URL>
+          username: Claude Code Alerts
+          icon_emoji: ":robot_face:"
+          title: '{{ template "claude_code.title" . }}'
+          text: '{{ template "claude_code.text" . }}'
+          color: '{{ if eq .Status "firing" }}#D63232{{ else }}#36A64F{{ end }}'
+policies:
+  - orgId: 1
+    receiver: cc-slack
+    group_by: ["grafana_folder", "alertname"]

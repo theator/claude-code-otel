@@ -15,3 +15,6 @@ __pycache__/
 data/
 lgtm-data/
 phoenix-data/
+
+# Opt-in Slack webhook — contains a secret, never commit.
+grafana-alerting/notifications.yaml

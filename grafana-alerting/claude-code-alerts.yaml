@@ -1,0 +1,326 @@
+# Claude Code alert rules, provisioned into Grafana's Alerting page (no contact
+# points configured here — see notifications.yaml.example for opt-in Slack routing).
+# Edits to this file need `make reload-alerts` or `make restart` — alerting
+# provisioning is loaded at startup only, unlike the dashboard JSON.
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: claude-code
+    folder: Claude Code
+    interval: 1m
+    rules:
+      - uid: cc-daily-spend
+        title: Daily spend limit
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 86400, to: 0 }
+            model:
+              refId: A
+              expr: sum(increase(claude_code_cost_usage_USD_total[24h]))
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [250] } # tune me: USD per rolling 24h
+        for: 0s
+        noDataState: OK
+        execErrState: OK
+        labels:
+          severity: critical
+        annotations:
+          summary: Claude Code spend has exceeded $250 over the last 24h.
+          description: 'Spend over the last 24h: ${{ printf "%.2f" $values.A.Value }} (limit $250).'
+
+      - uid: cc-hourly-token-burn
+        title: Hourly token burn
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 3600, to: 0 }
+            model:
+              refId: A
+              expr: sum(increase(claude_code_token_usage_tokens_total{type=~"input|output"}[1h]))
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [5000000] } # tune me: fresh (input+output) tokens per rolling hour
+        for: 0s
+        noDataState: OK
+        execErrState: OK
+        labels:
+          severity: warning
+        annotations:
+          summary: Fresh input+output token usage has exceeded 5,000,000 in the last hour.
+          description: '{{ humanize $values.A.Value }} fresh input+output tokens in the last hour (limit 5,000,000).'
+
+      - uid: cc-model-spend
+        title: Watched-model spend
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 21600, to: 0 }
+            model:
+              refId: A
+              expr: sum(increase(claude_code_cost_usage_USD_total{model=~"claude-fable.*"}[6h])) # tune me: watchlist regex, e.g. "claude-fable.*|claude-opus.*"
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [50] } # tune me: USD per rolling 6h for the watched model(s)
+        for: 0s
+        noDataState: OK
+        execErrState: OK
+        labels:
+          severity: warning
+        annotations:
+          summary: Spend on a watched model has exceeded $50 over the last 6h.
+          description: 'Watched-model spend over 6h: ${{ printf "%.2f" $values.A.Value }} (limit $50).'
+
+      - uid: cc-unexpected-model
+        title: Unexpected model in use
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 3600, to: 0 }
+            model:
+              refId: A
+              expr: sum by (model) (increase(claude_code_cost_usage_USD_total{model!~"(.+[/:])?claude-.*"}[1h])) # tune me: allowlist regex — covers router-prefixed names (anthropic/claude-*, bedrock:claude-*); add e.g. "|my-approved-model"
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] } # tune me: fires on any spend from a non-"claude-*" model
+        for: 0s
+        noDataState: OK
+        execErrState: OK
+        labels:
+          severity: warning
+        annotations:
+          summary: Spend was recorded on a model outside the claude-* allowlist in the last hour.
+          description: 'Spend of ${{ printf "%.2f" $values.A.Value }} on model `{{ $labels.model }}` in the last hour — outside the claude-* allowlist.'
+
+      - uid: cc-sensitive-info
+        title: Sensitive data in telemetry
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: loki
+            relativeTimeRange: { from: 600, to: 0 }
+            model:
+              refId: A
+              expr: 'sum by (session_id) (count_over_time({service_name=~".+"} | event_name=~"user_prompt|tool_result" | line_format "{{.prompt}} {{.tool_input}}" |~ `AKIA[0-9A-Z]{16}|sk-ant-[A-Za-z0-9_-]{16,}|sk-[A-Za-z0-9]{32,}|ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|BEGIN [A-Z ]*PRIVATE KEY|xox[baprs]-[A-Za-z0-9-]{10,}|hooks\.slack\.com/services/T[A-Za-z0-9]+/B[A-Za-z0-9]+|AIza[A-Za-z0-9_-]{35}|eyJ[A-Za-z0-9_-]{10,}\.eyJ` [10m]))' # tune me: add more secret patterns to the alternation
+              queryType: instant
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        for: 0s
+        noDataState: OK
+        execErrState: OK
+        labels:
+          severity: critical
+        annotations:
+          summary: A secret-like string (API key, token, or private key) was captured into local telemetry logs — consider rotating it; `make clean` wipes stored telemetry.
+          description: 'Secret-like string captured — session `{{ $labels.session_id }}`, {{ $values.A.Value }} match(es) in the last 10m. Consider rotating it; `make clean` wipes stored telemetry.'
+          explore_logs: 'http://localhost:3300/explore?schemaVersion=1&panes=%7B%22logs%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22uid%22%3A%22loki%22%2C%22type%22%3A%22loki%22%7D%2C%22expr%22%3A%22%7Bservice_name%3D~%5C%22.%2B%5C%22%7D%20%7C%20event_name%3D~%5C%22user_prompt%7Ctool_result%5C%22%20%7C%20session_id%3D%5C%22{{ $labels.session_id }}%5C%22%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-24h%22%2C%22to%22%3A%22now%22%7D%7D%7D&orgId=1' # opens Explore, scoped to the offending session, last 24h (covers delayed triage)
+
+      - uid: cc-cache-hit-collapse
+        title: Cache hit-rate collapse
+        condition: D
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 900, to: 0 }
+            model:
+              refId: A
+              expr: sum(increase(claude_code_token_usage_tokens_total{type="cacheRead"}[15m])) / sum(increase(claude_code_token_usage_tokens_total{type=~"input|cacheRead|cacheCreation"}[15m]))
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 900, to: 0 }
+            model:
+              refId: B
+              expr: sum(increase(claude_code_token_usage_tokens_total{type=~"input|cacheRead|cacheCreation"}[15m])) # tune me: min token volume before this rule engages, avoids noise on quiet days
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: math
+              expression: "$A < 0.5 && $B > 100000" # tune me: cache-hit floor (0.5) and the volume guard above
+          - refId: D
+            datasourceUid: __expr__
+            model:
+              refId: D
+              type: threshold
+              expression: C
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        for: 15m
+        noDataState: OK
+        execErrState: OK
+        labels:
+          severity: critical
+        annotations:
+          summary: Cache hit rate has dropped below 50% on meaningful token volume for 15m — a cache miss costs 12.5-20x a hit.
+          description: 'Cache hit rate {{ humanizePercentage $values.A.Value }} over 15m on {{ humanize $values.B.Value }} tokens (floor 50%).'
+
+      - uid: cc-api-error-burst
+        title: API error burst
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: loki
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              refId: A
+              expr: 'sum(count_over_time({service_name=~".+"} | event_name=~"api_error|api_retries_exhausted" [5m]))'
+              queryType: instant
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [5] } # tune me: API errors/retries-exhausted per rolling 5m
+        for: 0s
+        noDataState: OK
+        execErrState: OK
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 5 API errors/exhausted retries in 5m — often a 429 rate-limit; see the dashboard's Code Productivity & Errors panel.
+          description: '{{ printf "%.0f" $values.A.Value }} API errors/exhausted retries in the last 5m (often a 429 rate-limit; limit 5).'
+
+      - uid: cc-burn-rate
+        title: Spend pace would blow daily budget
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 10800, to: 0 }
+            model:
+              refId: A
+              expr: sum(increase(claude_code_cost_usage_USD_total[3h])) * 8 # tune me: *8 extrapolates the trailing 3h to a 24h pace
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [900] } # tune me: set ABOVE your normal working-hours pace — bursty use projects 3-4x the real daily total (p95 of one week's history here was ~$880)
+        for: 0s
+        noDataState: OK
+        execErrState: OK
+        labels:
+          severity: warning
+        annotations:
+          summary: Spend over the last 3h, extrapolated to a 24h pace, is exceptionally high.
+          description: 'Projected 24h spend ${{ printf "%.0f" $values.A.Value }} (3h pace × 8) exceeds the $900 burst threshold.'
+
+      - uid: cc-runaway-loop
+        title: Runaway agent/tool loop
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: loki
+            relativeTimeRange: { from: 600, to: 0 }
+            model:
+              refId: A
+              expr: 'max by (session_id) (count_over_time({service_name=~".+"} | event_name="tool_result" [10m]))'
+              queryType: instant
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [150] } # tune me: ~15 tool calls/min sustained; parallel-subagent sessions can legitimately run higher
+        for: 0s
+        noDataState: OK
+        execErrState: OK
+        labels:
+          severity: critical
+        annotations:
+          summary: A session made more than 150 tool calls in 10m — check for a runaway loop.
+          description: 'Session `{{ $labels.session_id }}` made {{ printf "%.0f" $values.A.Value }} tool calls in the last 10m (limit 150) — check for a runaway loop.'
+
+      - uid: cc-autocompact
+        title: Context auto-compaction
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: loki
+            relativeTimeRange: { from: 900, to: 0 }
+            model:
+              refId: A
+              expr: 'sum by (session_id) (count_over_time({service_name=~".+"} | event_name="compaction" | trigger="auto" [15m]))'
+              queryType: instant
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] } # tune me: raise to 2-3 to catch only thrash, not a single natural compaction
+        for: 0s
+        noDataState: OK
+        execErrState: OK
+        labels:
+          severity: info
+        annotations:
+          summary: A session's context was auto-compacted — context filled; consider starting a fresh session.
+          description: 'Session `{{ $labels.session_id }}` auto-compacted {{ printf "%.0f" $values.A.Value }} time(s) in 15m — context filled; consider starting a fresh session.'
