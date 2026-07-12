@@ -28,6 +28,8 @@ services:
       - lgtm-data:/data
       - ./grafana-dashboards/claude-code.json:/otel-lgtm/grafana/conf/provisioning/dashboards/custom/claude-code.json:ro
       - ./grafana-dashboards/provisioning.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/custom.yaml:ro
+      # Whole dir, not single files: picks up notifications.yaml (from `make setup-slack`) with no compose edits.
+      - ./grafana-alerting:/otel-lgtm/grafana/conf/provisioning/alerting:ro
       - ./otelcol-config.yaml:/otel-lgtm/otelcol-config.yaml:ro
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:3000/api/health"]
