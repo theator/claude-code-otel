@@ -795,6 +795,10 @@
                 "value": {
                   "mode": "continuous-blues"
                 }
+              },
+              {
+                "id": "unit",
+                "value": "short"
               }
             ]
           },
