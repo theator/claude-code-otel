@@ -59,5 +59,5 @@ Notes:
 
 Next:
   make up            # start the stack
-  open http://localhost:3000
+  open http://localhost:3300
 EOF

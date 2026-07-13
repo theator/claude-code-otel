@@ -18,7 +18,7 @@ A local observability stack for Claude Code's OpenTelemetry export. It receives 
 
 | Port | Service                                  |
 | ---- | ---------------------------------------- |
-| 3000 | Grafana UI (dashboard)                   |
+| 3300 | Grafana UI (dashboard)                   |
 | 4317 | OTLP gRPC   (Claude Code → collector)    |
 | 4318 | OTLP HTTP   (Claude Code → collector)    |
 | 9090 | Prometheus API (debugging)               |
@@ -30,7 +30,7 @@ A local observability stack for Claude Code's OpenTelemetry export. It receives 
 
 ```bash
 make start        # configure Claude Code telemetry + start the stack
-open http://localhost:3000
+open http://localhost:3300
 ```
 
 `make start` runs `make setup` (telemetry env) then `make up` (containers). Restart any open Claude Code sessions so they pick up the new settings.
