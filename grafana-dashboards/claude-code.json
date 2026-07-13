@@ -537,7 +537,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "label_replace(sum by (model, type) (rate(claude_code_token_usage_tokens_total{session_id=~\"$session.*\"}[$__rate_interval])) * $__interval_ms / 1000, \"model\", \"$1\", \"model\", \"^([^[]+).*$\")",
+          "expr": "sum by (model, type) (label_replace(label_replace(label_replace(rate(claude_code_token_usage_tokens_total{session_id=~\"$session.*\"}[$__rate_interval]),\"model\",\"$1\",\"model\",\"^(.*)-[0-9]{8}$\"),\"model\",\"$1\",\"model\",\"^([^[]+)[[].*$\"),\"model\",\"$1\",\"model\",\"^~(.*)$\")) * $__interval_ms / 1000",
           "refId": "A",
           "legendFormat": "{{model}} - {{type}}"
         }
@@ -581,7 +581,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "label_replace(sum by (model) (rate(claude_code_token_usage_tokens_total{session_id=~\"$session.*\"}[$__rate_interval])) * $__interval_ms / 1000, \"model\", \"$1\", \"model\", \"^([^[]+).*$\")",
+          "expr": "sum by (model) (label_replace(label_replace(label_replace(rate(claude_code_token_usage_tokens_total{session_id=~\"$session.*\"}[$__rate_interval]),\"model\",\"$1\",\"model\",\"^(.*)-[0-9]{8}$\"),\"model\",\"$1\",\"model\",\"^([^[]+)[[].*$\"),\"model\",\"$1\",\"model\",\"^~(.*)$\")) * $__interval_ms / 1000",
           "refId": "A",
           "legendFormat": "{{model}}"
         }
